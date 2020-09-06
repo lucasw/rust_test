@@ -45,6 +45,10 @@ impl Map {
     fn get(&self, x: usize, y: usize) -> Cell {
         return self.cells[y * self._width + x];
     }
+
+    fn put(&mut self, _player: *mut Player, x: usize, y: usize) {
+        self.cells[y * self._width + x].large_object = _player;
+    }
 }
 
 fn main() {
@@ -55,17 +59,14 @@ fn main() {
     print!("F");
     println!("{:?}", xs);
     */
-    /*
-    let _player: *mut Player;  // = &Player::default();
+    let _player: *mut Player;
     _player = &mut Player::default();
-    */
 
     const WIDTH: usize = 80;
     const HEIGHT: usize = 30;
     let mut _map = Map::new(WIDTH, HEIGHT);
-    // let mut row: [Cell; WIDTH] = [Cell::default(); WIDTH];
 
-    // row[37].large_object = _player;
+    _map.put(_player, 40, 25);
 
     // println!("{:#?}", row);
     print!("\n");
