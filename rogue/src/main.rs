@@ -117,6 +117,9 @@ fn main() {
 
     let mut count: i32 = 0;
     loop {
+        // Clear the screen, move to 0,0  "\033[2J"
+        // Move up N lines "\033[<N>A"
+        println!("\x1b[2J");
         println!("{}", count);
         _map.print();
         std::thread::sleep(std::time::Duration::from_millis(100));
