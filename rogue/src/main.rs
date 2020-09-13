@@ -14,7 +14,8 @@ struct Player {
 impl Default for Player {
     fn default() -> Player {
         Player {
-            symbol: '@',
+            // symbol: '@',
+            symbol: '♘',
         }
     }
 }
