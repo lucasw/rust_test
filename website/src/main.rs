@@ -20,7 +20,7 @@ extern crate rouille;
 
 // use std::io;
 // use std::env;
-// use std::process::Command;
+use std::process::Command;
 // use rouille::cgi::CgiRun;
 
 fn main() {
@@ -41,6 +41,8 @@ fn main() {
             (GET) (/start) => {
                 // If the request's URL is `/hello/world`, we jump here.
                 println!("start");
+
+                // TODO(lucasw) execute a command, store the handle/pid somewhere
 
                 let page: &str = "<br><br><br><br><b>Start Page</b><br>
                                  <a href=\"/\">main</a>";
