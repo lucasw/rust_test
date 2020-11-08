@@ -74,23 +74,34 @@ target_link_libraries(hello_world2
 #   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 # )
 
-message(STATUS "##############################")
-message(STATUS "${CATKIN_PACKAGE_BIN_DESTINATION}")
-message(STATUS ${CATKIN_PACKAGE_BIN_DESTINATION})
-message(STATUS "##############################")
-corrosion_install(
-  TARGETS hello_world1
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+function(rust_target target_name)
+  add_custom_target(${target_name}_copy_to_devel ALL  # TARGET hello_world1 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${target_name}> ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/${target_name}
+  )
+  add_dependencies(${target_name}_copy_to_devel ${target_name})
+  corrosion_install(
+    TARGETS ${target_name}
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+endfunction(rust_target)
+
+rust_target(hello_world1)
+rust_target(loginfo)
 
 # target is imported and does not build here
 # add_custom_command(TARGET hello_world1 POST_BUILD
 #   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:hello_world1> ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1
 # )
-add_custom_target(copy_to_devel ALL  # TARGET hello_world1 POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:hello_world1> ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1
-)
-add_dependencies(copy_to_devel hello_world1)
+
+# This works
+# add_custom_target(copy_to_devel ALL  # TARGET hello_world1 POST_BUILD
+#   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:hello_world1> ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1
+# )
+# add_dependencies(copy_to_devel hello_world1)
+# corrosion_install(
+#   TARGETS hello_world1
+#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
 
 # Doesn't run after build
 # configure_file(${CMAKE_CURRENT_BINARY_DIR}/hello_world1 ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1 COPYONLY)
