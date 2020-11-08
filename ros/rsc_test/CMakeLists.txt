@@ -83,9 +83,18 @@ corrosion_install(
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(TARGETS hello_world2
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# target is imported and does not build here
+# add_custom_command(TARGET hello_world1 POST_BUILD
+#   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:hello_world1> ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1
+# )
+add_custom_target(copy_to_devel ALL  # TARGET hello_world1 POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:hello_world1> ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1
 )
+add_dependencies(copy_to_devel hello_world1)
+
+# Doesn't run after build
+# configure_file(${CMAKE_CURRENT_BINARY_DIR}/hello_world1 ${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/hello_world1 COPYONLY)
+
 
 # install(TARGETS ${PROJECT_NAME}
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
