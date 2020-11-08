@@ -3,7 +3,10 @@ project(rsc_test)
 
 # add_compile_options(-std=c++11)
 
-find_package(catkin REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  std_msgs
+)
 
 find_package(Corrosion REQUIRED)
 
@@ -44,13 +47,13 @@ corrosion_import_crate(MANIFEST_PATH rust_src/Cargo.toml)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES rsc_test
-#  CATKIN_DEPENDS other_catkin_pkg
+  CATKIN_DEPENDS roscpp rospy std_msgs
 #  DEPENDS system_lib
 )
 
 include_directories(
 # include
-# ${catkin_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS}
 )
 
 # add_library(${PROJECT_NAME}
@@ -60,9 +63,12 @@ include_directories(
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(hello_world2 src/hello_world2.cpp)
-# set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
-# add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(hello_world2
+  ${catkin_LIBRARIES}
+)
+
+add_executable(test_pub_sub src/test_pub_sub.cpp)
+target_link_libraries(test_pub_sub
   ${catkin_LIBRARIES}
 )
 

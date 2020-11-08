@@ -10,4 +10,7 @@
   <node name="hello_world2" pkg="rsc_test" type="hello_world2" output="screen" >
   </node>
 
+  <node name="test_pub_sub" pkg="rsc_test" type="test_pub_sub" output="screen" >
+  </node>
+
 </launch>
