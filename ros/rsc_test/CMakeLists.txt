@@ -7,7 +7,7 @@ find_package(catkin REQUIRED)
 
 find_package(Corrosion REQUIRED)
 
-corrosion_import_crate(MANIFEST_PATH hello_world1/Cargo.toml)
+corrosion_import_crate(MANIFEST_PATH rust_src/Cargo.toml)
 
 # find_package(Boost REQUIRED COMPONENTS system)
 

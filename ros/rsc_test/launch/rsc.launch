@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+
+  <node name="loginfo" pkg="rsc_test" type="loginfo" output="screen" >
+  </node>
+
+  <node name="hello_world1" pkg="rsc_test" type="hello_world1" output="screen" >
+  </node>
+
+  <node name="hello_world2" pkg="rsc_test" type="hello_world2" output="screen" >
+  </node>
+
+</launch>
