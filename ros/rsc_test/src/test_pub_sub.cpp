@@ -14,7 +14,7 @@ public:
 
   void callback(const std_msgs::Float32ConstPtr& msg)
   {
-    ROS_INFO_STREAM("float from rust " << msg->data);
+    ROS_INFO_STREAM("float from rust " << msg->data << " " << val);
   }
 
   void update(const ros::TimerEvent& event)
