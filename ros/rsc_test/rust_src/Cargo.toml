@@ -11,9 +11,11 @@ name = "hello_world1"
 path = "src/hello_world/main.rs"
 
 [[bin]]
-name = "loginfo"
+name = "log_test"
 path = "src/loginfo/main.rs"
 
 [dependencies]
 rosrust = "0.9.5"
 rosrust_msg = "0.1.1"
+# rosrust = { path = "../../../../rosrust/rosrust" }
+# rosrust_msg = { path = "../../../../rosrust/rosrust_msg" }
