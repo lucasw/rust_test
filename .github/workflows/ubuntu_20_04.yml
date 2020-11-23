@@ -1,0 +1,118 @@
+name: Ubuntu 20.04 Noetic rust_test
+
+# on: [push]
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    env:
+      ROS_CI_DESKTOP: "`lsb_release -cs`"  # e.g. [trusty|xenial|...]
+      # CI_SOURCE_PATH: $(pwd)
+      ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
+      CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
+      ROS_PARALLEL_JOBS: '-j8 -l6'
+      # Set the python path manually to include /usr/-/python2.7/dist-packages
+      # as this is where apt-get installs python packages.
+      PYTHONPATH: $PYTHONPATH:/usr/lib/python2.7/dist-packages:/usr/local/lib/python2.7/dist-packages
+      ROS_DISTRO: noetic
+    steps:
+      - name: rust_test
+        uses: actions/checkout@v1
+      - name: Install latest rust
+        run: |
+          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh -s -- -y
+      - name: rust version
+        run: |
+            which rustc
+            rustc --version
+            which cargo
+            cargo --version
+      - name: Corrosion
+        uses: actions/checkout@v2
+        with:
+          repository: AndrewGaspar/corrosion
+          ref: refs/heads/master
+          # submodules: recursive
+          path: corrosion
+      - name: Build and install Corrosion
+        run: |
+            pwd
+            ls -l
+            cmake -Scorrosion -Bbuild_corrosion -DCMAKE_BUILD_TYPE=Release
+            cmake --build build_corrosion --config Release
+            mkdir -p $HOME/other/install
+            cmake --install build_corrosion --config Release --prefix $HOME/other/install
+      - name: Configure ROS for install
+        run: |
+            sudo sh -c "echo \"deb http://packages.ros.org/ros/ubuntu $ROS_CI_DESKTOP main\" > /etc/apt/sources.list.d/ros-latest.list"
+            sudo apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+            sudo apt-get update -qq
+            sudo apt-get install dpkg
+            sudo apt-get install -y libyaml-cpp-dev
+      - name: Install ROS basic packages
+        run: |
+            sudo apt-get install -y python3-catkin-pkg
+            sudo apt-get install -y python3-catkin-tools
+            sudo apt-get install -y python3-rosdep
+            sudo apt-get install -y python3-wstool
+            sudo apt-get install -y python3-osrf-pycommon
+            sudo apt-get install -y ros-cmake-modules
+            sudo apt-get install -y ros-$ROS_DISTRO-ros-base
+            source /opt/ros/$ROS_DISTRO/setup.bash
+            sudo rosdep init
+            rosdep update  # --include-eol-distros  # Support EOL distros.
+      - name: Install ROS additional packages (TODO maybe don't need these)
+        run: |
+            sudo apt-get install -y ros-$ROS_DISTRO-actionlib
+            sudo apt-get install -y ros-$ROS_DISTRO-actionlib-msgs
+            sudo apt-get install -y ros-$ROS_DISTRO-camera-info-manager
+            sudo apt-get install -y ros-$ROS_DISTRO-compressed-image-transport
+            sudo apt-get install -y ros-$ROS_DISTRO-catkin
+            sudo apt-get install -y ros-$ROS_DISTRO-class-loader
+            sudo apt-get install -y ros-$ROS_DISTRO-cmake-modules
+            sudo apt-get install -y ros-$ROS_DISTRO-cv-bridge
+            sudo apt-get install -y ros-$ROS_DISTRO-dynamic-reconfigure
+            sudo apt-get install -y ros-$ROS_DISTRO-ddynamic-reconfigure
+            # Not in noetic yet
+            # sudo apt-get install -y ros-$ROS_DISTRO-ddynamic-reconfigure-python
+            sudo apt-get install -y ros-$ROS_DISTRO-eigen-conversions
+            sudo apt-get install -y ros-$ROS_DISTRO-geometry-msgs
+            sudo apt-get install -y ros-$ROS_DISTRO-genmsg
+            sudo apt-get install -y ros-$ROS_DISTRO-image-geometry
+            sudo apt-get install -y ros-$ROS_DISTRO-image-proc
+            sudo apt-get install -y ros-$ROS_DISTRO-image-transport
+            sudo apt-get install -y ros-$ROS_DISTRO-message-generation
+            sudo apt-get install -y ros-$ROS_DISTRO-message-runtime
+            # sudo apt-get install -y ros-$ROS_DISTRO-nodelet-core
+            # sudo apt-get install -y ros-$ROS_DISTRO-nodelet-topic-tools
+            # sudo apt-get install -y ros-$ROS_DISTRO-pcl-conversions
+            # sudo apt-get install -y ros-$ROS_DISTRO-pcl-ros
+            sudo apt-get install -y ros-$ROS_DISTRO-pluginlib
+            sudo apt-get install -y ros-$ROS_DISTRO-roscpp
+            sudo apt-get install -y ros-$ROS_DISTRO-roslib
+            sudo apt-get install -y ros-$ROS_DISTRO-roslint
+            sudo apt-get install -y ros-$ROS_DISTRO-rospy
+            sudo apt-get install -y ros-$ROS_DISTRO-rospy-message-converter
+            sudo apt-get install -y ros-$ROS_DISTRO-rostest
+            sudo apt-get install -y ros-$ROS_DISTRO-sensor-msgs
+            sudo apt-get install -y ros-$ROS_DISTRO-std-msgs
+            sudo apt-get install -y ros-$ROS_DISTRO-tf
+            sudo apt-get install -y ros-$ROS_DISTRO-tf-conversions
+            sudo apt-get install -y ros-$ROS_DISTRO-tf2-geometry-msgs
+            sudo apt-get install -y ros-$ROS_DISTRO-tf2-msgs
+            sudo apt-get install -y ros-$ROS_DISTRO-tf2-py
+            sudo apt-get install -y ros-$ROS_DISTRO-tf2-ros
+            sudo apt-get install -y ros-$ROS_DISTRO-tf2-sensor-msgs
+      - name: build
+        run: |
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          cd ..
+          mkdir -p catkin_ws/src
+          cd catkin_ws/src
+          ln -s ../../rust_test/ros/rsc_test
+          cd ..
+          export PATH=$PATH:$HOME/other/install/Corrosion
+          catkin build

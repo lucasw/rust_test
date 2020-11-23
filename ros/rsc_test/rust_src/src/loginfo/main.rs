@@ -80,7 +80,7 @@ impl TestNode {
 }
 
 fn main() {
-    rosrust::init("logger");
+    rosrust::init("log_test");
     // TODO(lucasw) make a default new
     let mut test_node = TestNode::new();
     let rate = rosrust::rate(2.0);

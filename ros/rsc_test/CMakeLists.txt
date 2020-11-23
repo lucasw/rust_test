@@ -92,7 +92,7 @@ function(rust_target target_name)
 endfunction(rust_target)
 
 rust_target(hello_world1)
-rust_target(loginfo)
+rust_target(log_test)
 
 # target is imported and does not build here
 # add_custom_command(TARGET hello_world1 POST_BUILD
