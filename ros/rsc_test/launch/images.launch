@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+
+  <node pkg="image_publisher" type="image_publisher"
+    name="image_pub" output="screen"
+    args="$(find image_manip)/data/mosaic.png" >
+    <param name="publish_rate" value="1.0"/>
+  </node>
+
+  <node pkg="rsc_test" type="image_sub_pub"
+    name="image_sub_pub" output="screen" >
+    <remap from="image_in" to="image_pub/image_raw" />
+  </node>
+
+</launch>

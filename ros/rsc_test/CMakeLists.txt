@@ -63,14 +63,13 @@ include_directories(
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(hello_world2 src/hello_world2.cpp)
-target_link_libraries(hello_world2
-  ${catkin_LIBRARIES}
-)
+target_link_libraries(hello_world2 ${catkin_LIBRARIES})
 
 add_executable(test_pub_sub src/test_pub_sub.cpp)
-target_link_libraries(test_pub_sub
-  ${catkin_LIBRARIES}
-)
+target_link_libraries(test_pub_sub ${catkin_LIBRARIES})
+
+# add_executable(image_sub_pub src/image_sub_pub.cpp)
+# target_link_libraries(image_sub_pub ${catkin_LIBRARIES})
 
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
@@ -93,6 +92,7 @@ endfunction(rust_target)
 
 rust_target(hello_world1)
 rust_target(log_test)
+rust_target(image_sub_pub)
 
 # target is imported and does not build here
 # add_custom_command(TARGET hello_world1 POST_BUILD

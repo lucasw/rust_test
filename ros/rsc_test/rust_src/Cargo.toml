@@ -14,8 +14,13 @@ path = "src/hello_world/main.rs"
 name = "log_test"
 path = "src/loginfo/main.rs"
 
+[[bin]]
+name = "image_sub_pub"
+path = "src/image_sub_pub/main.rs"
+
 [dependencies]
-rosrust = "0.9.5"
-rosrust_msg = "0.1.1"
+rosrust = { git = "https://github.com/lucasw/rosrust", branch = "noetic_aggregated" }
+rosrust_msg = { git = "https://github.com/lucasw/rosrust", branch = "noetic_aggregated" }
+# rosrust_msg = "0.1.1"
 # rosrust = { path = "../../../../rosrust/rosrust" }
 # rosrust_msg = { path = "../../../../rosrust/rosrust_msg" }
