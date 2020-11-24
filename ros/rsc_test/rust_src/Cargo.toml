@@ -1,5 +1,5 @@
 [package]
-name = "hello_world1"
+name = "rsc_test"
 version = "0.1.0"
 authors = ["Lucas Walter <wsacul@gmail.com>"]
 edition = "2018"
