@@ -1,0 +1,19 @@
+[package]
+name ="frei0r_rs"
+# name = "libfrei0r-sys"
+version = "0.1.0"
+# links = "frei0r"
+# build = "build.rs"
+edition = "2018"
+
+[[bin]]
+name = "loadlib_test"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+libloading = "0.6"
+
+[build-dependencies]
+cc = { version = "1.0", features = ["parallel"] }
+pkg-config = "0.3"
