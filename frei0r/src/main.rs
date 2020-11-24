@@ -2,11 +2,13 @@ extern crate libloading;
 
 // use std::env;
 use libloading::{Library, Symbol};
+use std::ffi::CString;
 
 // type AddFunc = fn(isize, isize) -> isize;
 
 pub type F0rInstance = *mut ::std::os::raw::c_void;
 
+/*
 extern "C" {
     #[doc = " f0r_init() is called once when the plugin is loaded by the application."]
     #[doc = " \\see f0r_deinit"]
@@ -17,6 +19,8 @@ extern "C" {
     #[doc = " \\see f0r_init"]
     pub fn f0r_deinit();
 }
+*/
+
 #[doc = " The f0r_plugin_info_t structure is filled in by the plugin"]
 #[doc = " to tell the application about its name, type, number of parameters,"]
 #[doc = " and version."]
@@ -55,6 +59,7 @@ pub struct F0rPluginInfo {
     pub explanation: *const ::std::os::raw::c_char,
 }
 
+/*
 extern "C" {
     #[doc = " Constructor for effect instances. The plugin returns a pointer to"]
     #[doc = " its internal instance structure."]
@@ -75,6 +80,7 @@ extern "C" {
 
     pub fn f0r_update(instance: F0rInstance, time: f64, inframe: *const u32, outframe: *mut u32);
 }
+*/
 type F0rConstruct = fn(::std::os::raw::c_uint, ::std::os::raw::c_uint) -> F0rInstance;
 type F0rInit = fn();
 
@@ -118,14 +124,28 @@ fn main() {
 
         let f0r_get_plugin_infor: Symbol<F0rGetPluginInfo> = lib.get(b"f0r_get_plugin_info").unwrap();
         // Need to write a Default for this to work?
-        // let mut info: F0rPluginInfo;
-        // f0r_get_plugin_infor(&mut info);
-        // println!("num_params {}", info.num_params);
+        let mut info = F0rPluginInfo {
+            name: CString::new("abc").unwrap().as_ptr(),
+            author: CString::new("def").unwrap().as_ptr(),
+            plugin_type: 0,
+            color_model: 0,
+            frei0r_version: 0,
+            major_version: 0,
+            minor_version: 0,
+            num_params: 0,
+            explanation: CString::new("none").unwrap().as_ptr(),
+        };
+        f0r_get_plugin_infor(&mut info);
+        println!("info plugin_type {}, color_model {}, frei0r_version {} {} {}, num_params {}",
+                 info.plugin_type, info.color_model, info.frei0r_version,
+                 info.major_version, info.minor_version,
+                 info.num_params);
+        // Not sure about the strings yet
+        // println!("num_params {} {}", CString::from_raw(info.name).to_str().unwrap(), info.num_params);
 
         let f0r_constructor: Symbol<F0rConstruct> = lib.get(b"f0r_construct").unwrap();
         let _instance = f0r_constructor(width, height);
 
-        // let answer = func(1, 2);
-        // println!("1 + 2 = {}", answer);
+        println!("done with frei0r");
     }
 }
