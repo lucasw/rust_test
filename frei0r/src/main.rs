@@ -110,8 +110,8 @@ pub type F0rGetPluginInfo = fn(*mut F0rPluginInfo);
 
 
 fn main() {
-    let library_path = "/usr/lib/frei0r-1/saturation.so";  // env::args().nth(1).expect("USAGE: loading <LIB>");
-    println!("Loading {}", library_path);
+    let library_path = "/usr/lib/frei0r-1/saturat0r.so";  // env::args().nth(1).expect("USAGE: loading <LIB>");
+    println!("loading {}", library_path);
 
     let lib = Library::new(library_path).unwrap();
 
@@ -119,9 +119,11 @@ fn main() {
     let height = 8;
 
     unsafe {
+        println!("f0r_init");
         let f0r_initor: Symbol<F0rInit> = lib.get(b"f0r_init").unwrap();
         f0r_initor();
 
+        println!("f0r_get_plugin_info");
         let f0r_get_plugin_infor: Symbol<F0rGetPluginInfo> = lib.get(b"f0r_get_plugin_info").unwrap();
         // Need to write a Default for this to work?
         let mut info = F0rPluginInfo {
@@ -136,12 +138,13 @@ fn main() {
             explanation: CString::new("none").unwrap().as_ptr(),
         };
         f0r_get_plugin_infor(&mut info);
-        println!("info plugin_type {}, color_model {}, frei0r_version {} {} {}, num_params {}",
-                 info.plugin_type, info.color_model, info.frei0r_version,
-                 info.major_version, info.minor_version,
-                 info.num_params);
         // Not sure about the strings yet
         // println!("num_params {} {}", CString::from_raw(info.name).to_str().unwrap(), info.num_params);
+        println!("plugin type {}, color model {}",
+                 info.plugin_type, info.color_model);
+        println!("frei0r version {} {} {}",
+                 info.frei0r_version, info.major_version, info.minor_version);
+        println!("num params {}", info.num_params);
 
         let f0r_constructor: Symbol<F0rConstruct> = lib.get(b"f0r_construct").unwrap();
         let _instance = f0r_constructor(width, height);
