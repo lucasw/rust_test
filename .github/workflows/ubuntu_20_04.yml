@@ -10,13 +10,6 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       ROS_CI_DESKTOP: "`lsb_release -cs`"  # e.g. [trusty|xenial|...]
-      # CI_SOURCE_PATH: $(pwd)
-      ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
-      CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
-      ROS_PARALLEL_JOBS: '-j8 -l6'
-      # Set the python path manually to include /usr/-/python2.7/dist-packages
-      # as this is where apt-get installs python packages.
-      PYTHONPATH: $PYTHONPATH:/usr/lib/python2.7/dist-packages:/usr/local/lib/python2.7/dist-packages
       ROS_DISTRO: noetic
     steps:
       - name: rust_test
@@ -43,8 +36,12 @@ jobs:
             ls -l
             cmake -Scorrosion -Bbuild_corrosion -DCMAKE_BUILD_TYPE=Release
             cmake --build build_corrosion --config Release
-            mkdir -p $HOME/other/install
-            cmake --install build_corrosion --config Release --prefix $HOME/other/install
+            sudo cmake --install build_corrosion --config Release
+      - name: Test Corrosion install
+        run: |
+            cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
+        # env:
+        #     PATH: ${{ env.PATH }}:$HOME/other/install/bin
       - name: Configure ROS for install
         run: |
             sudo sh -c "echo \"deb http://packages.ros.org/ros/ubuntu $ROS_CI_DESKTOP main\" > /etc/apt/sources.list.d/ros-latest.list"
@@ -114,5 +111,4 @@ jobs:
           cd catkin_ws/src
           ln -s ../../rust_test/ros/rsc_test
           cd ..
-          export PATH=$PATH:$HOME/other/install/Corrosion
           catkin build
