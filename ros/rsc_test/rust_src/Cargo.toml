@@ -26,6 +26,12 @@ path = "src/serial_test/client.rs"
 name = "serial_host"
 path = "src/serial_test/host.rs"
 
+[profile.dev]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+
 [dependencies]
 rosrust = { git = "https://github.com/lucasw/rosrust", branch = "noetic_aggregated" }
 rosrust_msg = { git = "https://github.com/lucasw/rosrust", branch = "noetic_aggregated" }

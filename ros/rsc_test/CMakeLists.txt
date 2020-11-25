@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(rsc_test)
 
-# add_compile_options(-std=c++11)
+# add_compile_options(-O3 -std=c++17)
+add_compile_options(-std=c++17)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -68,8 +69,8 @@ target_link_libraries(hello_world2 ${catkin_LIBRARIES})
 add_executable(test_pub_sub src/test_pub_sub.cpp)
 target_link_libraries(test_pub_sub ${catkin_LIBRARIES})
 
-# add_executable(image_sub_pub src/image_sub_pub.cpp)
-# target_link_libraries(image_sub_pub ${catkin_LIBRARIES})
+add_executable(image_sub_pub_cpp src/image_sub_pub.cpp)
+target_link_libraries(image_sub_pub_cpp ${catkin_LIBRARIES})
 
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html

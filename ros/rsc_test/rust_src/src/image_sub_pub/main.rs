@@ -19,13 +19,16 @@ impl ImageSubPub {
     fn new() -> Self{
         rosrust::ros_info!("new ImageSubPub");
         let image_pub = rosrust::publish("image_out", 4).unwrap();
-        let fr = 2.5;
+        let fr = 8.0;
 
         let image_callback = {
-            move |msg: Image| {
-                rosrust::ros_info!("preferred callback {} {} {} {} {}",
+            move |mut msg: Image| {
+                rosrust::ros_info!("image callback {} {} {} {} {}",
                                    msg.width, msg.height, msg.data.len(), msg.encoding,
                                    fr);
+                for pixel in msg.data.iter_mut() {
+                    *pixel = (*pixel as f32 * fr) as u8;
+                }
                 image_pub.send(msg).unwrap();
             }
         };
