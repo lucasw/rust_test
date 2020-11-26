@@ -11,17 +11,18 @@ jobs:
     env:
       ROS_CI_DESKTOP: "`lsb_release -cs`"  # e.g. [trusty|xenial|...]
       # CI_SOURCE_PATH: $(pwd)
-      ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
-      CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
-      ROS_PARALLEL_JOBS: '-j8 -l6'
+      # ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
+      # CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
+      # ROS_PARALLEL_JOBS: '-j8 -l6'
       CMAKE_PREFIX_PATH: $HOME/other/install
       ROS_DISTRO: noetic
     steps:
       - name: home test
         run: |
-            echo ${{ env.ROSINSTALL_FILE }}
-            echo $ROSINSTALL_FILE
+            # echo ${{ env.ROSINSTALL_FILE }}
+            # echo $ROSINSTALL_FILE
             echo ${HOME}
+            echo ${{ env.HOME }}
             ls -l $HOME
             echo ${CMAKE_PREFIX_PATH}
             echo $CMAKE_PREFIX_PATH
@@ -52,7 +53,9 @@ jobs:
             cmake --build build_corrosion --config Release
             mkdir -p $HOME/other/install
             cmake --install build_corrosion --config Release --prefix $HOME/other/install
-            echo $CMAKE_PREFIX_PATH
+      - name: Test Corrosion install
+            find $HOME/other/install
+            echo ${{ env.CMAKE_PREFIX_PATH }}
             cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
       - name: Configure ROS for install
         run: |
