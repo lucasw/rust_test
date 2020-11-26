@@ -14,7 +14,7 @@ jobs:
       ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
       CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
       ROS_PARALLEL_JOBS: '-j8 -l6'
-      CMAKE_PREFIX_PATH: ${{ env.HOME }}/other/install
+      CMAKE_PREFIX_PATH: $HOME/other/install
       ROS_DISTRO: noetic
     steps:
       - name: home test
