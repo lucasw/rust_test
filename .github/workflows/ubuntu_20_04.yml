@@ -16,12 +16,14 @@ jobs:
       # ROS_PARALLEL_JOBS: '-j8 -l6'
       CMAKE_PREFIX_PATH: $HOME/other/install
       PATH: /home/lucasw/other/install/bin:$PATH
+      PATH: $PATH:/home/lucasw/other/install/bin
       ROS_DISTRO: noetic
     steps:
       - name: home test
         run: |
             # echo ${{ env.ROSINSTALL_FILE }}
             # echo $ROSINSTALL_FILE
+            echo ${{ env.PATH }}
             echo ${HOME}
             echo ${{ env.HOME }}
             ls -l $HOME
