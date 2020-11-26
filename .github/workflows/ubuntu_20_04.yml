@@ -20,6 +20,10 @@ jobs:
       CMAKE_PREFIX_PATH: $HOME/other/install:$CMAKE_PREFIX_PATH
       ROS_DISTRO: noetic
     steps:
+      - name: home test
+        run: |
+            echo $HOME
+            echo $CMAKE_PREFIX_PATH
       - name: rust_test
         uses: actions/checkout@v1
       - name: Install latest rust
