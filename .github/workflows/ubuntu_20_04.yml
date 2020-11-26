@@ -56,14 +56,14 @@ jobs:
             cmake -Scorrosion -Bbuild_corrosion -DCMAKE_BUILD_TYPE=Release
             cmake --build build_corrosion --config Release
             mkdir -p $HOME/other/install
-            cmake --install build_corrosion --config Release --prefix $HOME/other/install
+            sudo cmake --install build_corrosion --config Release # --prefix $HOME/other/install
       - name: Test Corrosion install
         run: |
             find $HOME/other/install
             echo ${{ env.CMAKE_PREFIX_PATH }}
             cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
-        env:
-            PATH: ${{ env.PATH }}:$HOME/other/install/bin
+        # env:
+        #     PATH: ${{ env.PATH }}:$HOME/other/install/bin
       - name: Configure ROS for install
         run: |
             sudo sh -c "echo \"deb http://packages.ros.org/ros/ubuntu $ROS_CI_DESKTOP main\" > /etc/apt/sources.list.d/ros-latest.list"
