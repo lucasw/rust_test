@@ -15,7 +15,6 @@ jobs:
       # CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
       # ROS_PARALLEL_JOBS: '-j8 -l6'
       CMAKE_PREFIX_PATH: $HOME/other/install
-      PATH: $PATH:$HOME/other/install/bin
       ROS_DISTRO: noetic
     steps:
       - name: home test
@@ -29,6 +28,8 @@ jobs:
             echo ${CMAKE_PREFIX_PATH}
             echo $CMAKE_PREFIX_PATH
             echo ${{ env.CMAKE_PREFIX_PATH }}
+        env:
+            PATH: ${{ env.PATH }}:$HOME/other/install/bin
       - name: rust_test
         uses: actions/checkout@v1
       - name: Install latest rust
@@ -60,6 +61,8 @@ jobs:
             find $HOME/other/install
             echo ${{ env.CMAKE_PREFIX_PATH }}
             cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
+        env:
+            PATH: ${{ env.PATH }}:$HOME/other/install/bin
       - name: Configure ROS for install
         run: |
             sudo sh -c "echo \"deb http://packages.ros.org/ros/ubuntu $ROS_CI_DESKTOP main\" > /etc/apt/sources.list.d/ros-latest.list"
