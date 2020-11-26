@@ -10,11 +10,6 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       ROS_CI_DESKTOP: "`lsb_release -cs`"  # e.g. [trusty|xenial|...]
-      # CI_SOURCE_PATH: $(pwd)
-      # ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
-      # CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
-      # ROS_PARALLEL_JOBS: '-j8 -l6'
-      CMAKE_PREFIX_PATH: $HOME/other/install
       ROS_DISTRO: noetic
     steps:
       - name: rust_test
@@ -44,7 +39,6 @@ jobs:
             sudo cmake --install build_corrosion --config Release
       - name: Test Corrosion install
         run: |
-            echo ${{ env.CMAKE_PREFIX_PATH }}
             cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
         # env:
         #     PATH: ${{ env.PATH }}:$HOME/other/install/bin
