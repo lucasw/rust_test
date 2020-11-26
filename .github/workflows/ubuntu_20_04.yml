@@ -17,20 +17,6 @@ jobs:
       CMAKE_PREFIX_PATH: $HOME/other/install
       ROS_DISTRO: noetic
     steps:
-      - name: home test
-        run: |
-            # echo ${{ env.ROSINSTALL_FILE }}
-            # echo $ROSINSTALL_FILE
-            echo ${{ env.PATH }}
-            echo $PATH
-            echo ${HOME}
-            echo ${{ env.HOME }}
-            ls -l $HOME
-            echo ${CMAKE_PREFIX_PATH}
-            echo $CMAKE_PREFIX_PATH
-            echo ${{ env.CMAKE_PREFIX_PATH }}
-        # env:
-        # PATH: ${{ env.PATH }}:$HOME/other/install/bin
       - name: rust_test
         uses: actions/checkout@v1
       - name: Install latest rust
@@ -55,11 +41,9 @@ jobs:
             ls -l
             cmake -Scorrosion -Bbuild_corrosion -DCMAKE_BUILD_TYPE=Release
             cmake --build build_corrosion --config Release
-            mkdir -p $HOME/other/install
-            sudo cmake --install build_corrosion --config Release # --prefix $HOME/other/install
+            sudo cmake --install build_corrosion --config Release
       - name: Test Corrosion install
         run: |
-            find $HOME/other/install
             echo ${{ env.CMAKE_PREFIX_PATH }}
             cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
         # env:
@@ -133,5 +117,4 @@ jobs:
           cd catkin_ws/src
           ln -s ../../rust_test/ros/rsc_test
           cd ..
-          export PATH=$PATH:$HOME/other/install/Corrosion
           catkin build
