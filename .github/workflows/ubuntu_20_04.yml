@@ -54,6 +54,7 @@ jobs:
             mkdir -p $HOME/other/install
             cmake --install build_corrosion --config Release --prefix $HOME/other/install
       - name: Test Corrosion install
+        run: |
             find $HOME/other/install
             echo ${{ env.CMAKE_PREFIX_PATH }}
             cmake --find-package -DNAME=Corrosion -DCOMPILER_ID=GNU -DLANGUAGE=C -DMODE=EXIST
