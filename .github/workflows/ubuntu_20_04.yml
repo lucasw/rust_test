@@ -14,14 +14,17 @@ jobs:
       ROSINSTALL_FILE: $CI_SOURCE_PATH/dependencies.rosinstall
       CATKIN_OPTIONS: $CI_SOURCE_PATH/catkin.options
       ROS_PARALLEL_JOBS: '-j8 -l6'
-      CMAKE_PREFIX_PATH: $HOME/other/install:$CMAKE_PREFIX_PATH
+      CMAKE_PREFIX_PATH: ${{ env.HOME }}/other/install
       ROS_DISTRO: noetic
     steps:
       - name: home test
         run: |
+            echo ${{ env.ROSINSTALL_FILE }}
+            echo $ROSINSTALL_FILE
             echo ${HOME}
             ls -l $HOME
             echo ${CMAKE_PREFIX_PATH}
+            echo $CMAKE_PREFIX_PATH
             echo ${{ env.CMAKE_PREFIX_PATH }}
       - name: rust_test
         uses: actions/checkout@v1
