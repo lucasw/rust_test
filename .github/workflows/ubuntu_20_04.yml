@@ -22,14 +22,15 @@ jobs:
             # echo ${{ env.ROSINSTALL_FILE }}
             # echo $ROSINSTALL_FILE
             echo ${{ env.PATH }}
+            echo $PATH
             echo ${HOME}
             echo ${{ env.HOME }}
             ls -l $HOME
             echo ${CMAKE_PREFIX_PATH}
             echo $CMAKE_PREFIX_PATH
             echo ${{ env.CMAKE_PREFIX_PATH }}
-        env:
-            PATH: ${{ env.PATH }}:$HOME/other/install/bin
+        # env:
+        # PATH: ${{ env.PATH }}:$HOME/other/install/bin
       - name: rust_test
         uses: actions/checkout@v1
       - name: Install latest rust
