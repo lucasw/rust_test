@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: home test
         run: |
-            echo ${$HOME}
+            echo ${HOME}
             echo $$HOME
             echo ${CMAKE_PREFIX_PATH}
             echo $CMAKE_PREFIX_PATH
