@@ -1,27 +1,15 @@
+extern crate image;
 extern crate libloading;
 
+use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage};
 // use std::env;
 use libloading::{Library, Symbol};
 // use std::ffi::CString;
 use std::ffi::CStr;
+use std::mem;
 use std::ptr;
 
-// type AddFunc = fn(isize, isize) -> isize;
-
 pub type F0rInstance = *mut ::std::os::raw::c_void;
-
-/*
-extern "C" {
-    #[doc = " f0r_init() is called once when the plugin is loaded by the application."]
-    #[doc = " \\see f0r_deinit"]
-    pub fn f0r_init() -> ::std::os::raw::c_int;
-}
-extern "C" {
-    #[doc = " f0r_deinit is called once when the plugin is unloaded by the application."]
-    #[doc = " \\see f0r_init"]
-    pub fn f0r_deinit();
-}
-*/
 
 #[doc = " The f0r_plugin_info_t structure is filled in by the plugin"]
 #[doc = " to tell the application about its name, type, number of parameters,"]
@@ -61,57 +49,70 @@ pub struct F0rPluginInfo {
     pub explanation: *const ::std::os::raw::c_char,
 }
 
-/*
-extern "C" {
-    #[doc = " Constructor for effect instances. The plugin returns a pointer to"]
-    #[doc = " its internal instance structure."]
-    #[doc = ""]
-    #[doc = " The resolution must be an integer multiple of 8,"]
-    #[doc = " must be greater than 0 and be at most 2048 in both dimensions."]
-    #[doc = " The plugin must set default values for all parameters in this function."]
-    #[doc = ""]
-    #[doc = " \\param width The x-resolution of the processed video frames"]
-    #[doc = " \\param height The y-resolution of the processed video frames"]
-    #[doc = " \\returns 0 on failure or a pointer != 0 on success"]
-    #[doc = ""]
-    #[doc = " \\see f0r_destruct"]
-    pub fn f0r_construct(
-        width: ::std::os::raw::c_uint,
-        height: ::std::os::raw::c_uint,
-    ) -> F0rInstance;
-
-    pub fn f0r_update(instance: F0rInstance, time: f64, inframe: *const u32, outframe: *mut u32);
-}
-*/
-type F0rConstruct = fn(::std::os::raw::c_uint, ::std::os::raw::c_uint) -> F0rInstance;
-type F0rInit = fn();
+type F0rUpdate = fn(F0rInstance, f64, *const u32, *mut u32);
 
 pub struct F0rInstanceWrapper {
     f0r_instance: F0rInstance,
+    f0r_update: F0rUpdate,
 }
 
-#[doc = " The f0r_plugin_info_t structure is filled in by the plugin"]
-#[doc = " to tell the application about its name, type, number of parameters,"]
-#[doc = " and version."]
-#[doc = ""]
-#[doc = " An application should ignore (i.e. not use) frei0r effects that"]
-#[doc = " have unknown values in the plugin_type or color_model field."]
-#[doc = " It should also ignore effects with a too high frei0r_version."]
-#[doc = ""]
-#[doc = " This is necessary to be able to extend the frei0r spec (e.g."]
-#[doc = " by adding new color models or plugin types) in a way that does not"]
-#[doc = " result in crashes when loading effects that make use of these"]
-#[doc = " extensions into an older application."]
-#[doc = ""]
-#[doc = " All strings are unicode, 0-terminated, and the encoding is utf-8."]
-/*
-extern "C" {
-    #[doc = " Is called once after init. The plugin has to fill in the values in info."]
-    #[doc = ""]
-    #[doc = " \\param info Pointer to an info struct allocated by the application."]
-    pub fn f0r_get_plugin_info(info: *mut F0rPluginInfo);
+fn vec8to32(vec8: &Vec<u8>) -> Vec<u32> {
+    let vec32 = unsafe {
+        let ratio = mem::size_of::<u32>() / mem::size_of::<u8>();
+
+        let length = vec8.len() / ratio;
+        let capacity = vec8.capacity() / ratio;
+        // let ptr = vec8.as_mut_ptr() as *mut u32;
+        let ptr = vec8.as_ptr() as *mut u32;
+
+        // Don't run the destructor for vec32
+        mem::forget(vec8);
+
+        // Construct new Vec
+        Vec::from_raw_parts(ptr, length, capacity)
+    };
+    vec32
 }
-*/
+
+fn vec32to8(vec32: &Vec<u32>) -> Vec<u8> {
+    let vec8 = unsafe {
+        let ratio = mem::size_of::<u32>() / mem::size_of::<u8>();
+
+        let length = vec32.len() * ratio;
+        let capacity = vec32.capacity() * ratio;
+        // let ptr = vec32.as_mut_ptr() as *mut u8;
+        let ptr = vec32.as_ptr() as *mut u8;
+
+        // Don't run the destructor for vec32
+        mem::forget(vec32);
+
+        // Construct new Vec
+        Vec::from_raw_parts(ptr, length, capacity)
+    };
+    vec8
+}
+
+impl F0rInstanceWrapper {
+    fn update(&self, time: f64, vec8: Vec<u8>) -> Vec<u8> {
+        let vec32 = vec8to32(&vec8);
+        println!("converted {} {}", vec8.len(), vec32.len());
+        // TODO(lucasw) create this once on init an re-use it?
+        let mut vec32_out: Vec<u32> = vec![0; vec32.len()];
+        println!("vec32 out 1 {}", vec32_out.len());
+        // TODO(lucasw) this is segfaulting
+        (self.f0r_update)(self.f0r_instance, time, vec32.as_ptr(), vec32_out.as_mut_ptr());
+        println!("vec32 out 2 {}", vec32_out.len());
+        let vec8_out = vec32to8(&vec32_out);
+        println!("converted {} {}", vec32_out.len(), vec8_out.len());
+        vec8_out
+    }
+
+    // TODO(lucasw) need a Drop to deconstruct this instance
+}
+
+type F0rConstruct = fn(::std::os::raw::c_uint, ::std::os::raw::c_uint) -> F0rInstance;
+type F0rInit = fn();
+
 pub type F0rGetPluginInfo = fn(*mut F0rPluginInfo);
 
 pub struct F0rWrapper {
@@ -181,6 +182,8 @@ impl F0rWrapper {
         }
     }
 
+    // TODO(lucasw) need a Drop to call the deinit
+
     fn instance(&self, width: u32, height: u32) -> F0rInstanceWrapper {
         let f0r_instance;
         unsafe {
@@ -191,11 +194,18 @@ impl F0rWrapper {
             println!("cstring test {:?}", t1);
             */
 
+            println!("w {} x h {}", width, height);
             let f0r_constructor: Symbol<F0rConstruct> = self.lib.get(b"f0r_construct").unwrap();
             f0r_instance = f0r_constructor(width, height);
         }
+        let f0r_update : Symbol<F0rUpdate>;
+        unsafe {
+            f0r_update = self.lib.get(b"f0r_update").unwrap();
+        }
+
         F0rInstanceWrapper {
-            f0r_instance,
+            f0r_instance: f0r_instance,
+            f0r_update: *f0r_update,
         }
     }
 }
@@ -206,7 +216,16 @@ fn main() {
     let f0r = F0rWrapper::default(&library_path);
     f0r.print();
 
-    let width = 8;
-    let height = 4;
-    let _f0r_inst = f0r.instance(width, height);
+    // TODO(lucasw) pass this in from a command line
+    let img_name = "/home/lucasw/catkin_ws/src/lucasw/vimjay/data/slowmo/frame01294_sm.png";
+    // TODO(lucasw) handle the case where this isn't found
+    let img = image::open(img_name).unwrap();
+
+    let (width, height) = img.dimensions();
+    let f0r_inst = f0r.instance(width, height);
+    // let rgb: Vec<u8> = img.raw_pixels();
+    let rgb: Vec<u8> = img.into_rgb8().to_vec();
+    let rgb_out = f0r_inst.update(0.0, rgb);
+
+    // image::save_buffer("test_out.png", &rgb_out, width, height, image::ColorType::Rgb8).unwrap();
 }
