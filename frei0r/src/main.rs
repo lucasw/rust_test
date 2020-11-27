@@ -86,6 +86,10 @@ extern "C" {
 type F0rConstruct = fn(::std::os::raw::c_uint, ::std::os::raw::c_uint) -> F0rInstance;
 type F0rInit = fn();
 
+pub struct F0rInstanceWrapper {
+    f0r_instance: F0rInstance,
+}
+
 #[doc = " The f0r_plugin_info_t structure is filled in by the plugin"]
 #[doc = " to tell the application about its name, type, number of parameters,"]
 #[doc = " and version."]
@@ -111,10 +115,12 @@ extern "C" {
 pub type F0rGetPluginInfo = fn(*mut F0rPluginInfo);
 
 pub struct F0rWrapper {
-    raw_info: F0rPluginInfo,
+    library_path: String,
+    lib: Library,
     name: String,
     author: String,
     explanation: String,
+    raw_info: F0rPluginInfo,
 }
 
 impl F0rWrapper {
@@ -122,6 +128,7 @@ impl F0rWrapper {
         // TODO(lucasw) only want to call from_raw once needs to be i
         println!("'{}' '{}'", self.name, self.author);
         println!("'{}'", self.explanation);
+        println!("'{}'", self.library_path);
         println!("plugin type {}, color model {}",
                  self.raw_info.plugin_type, self.raw_info.color_model);
         println!("frei0r version {} {} {}",
@@ -129,7 +136,15 @@ impl F0rWrapper {
         println!("num params {}", self.raw_info.num_params);
     }
 
-    fn default(lib: &Library) -> F0rWrapper {
+    fn default(library_path: &str) -> F0rWrapper {
+        let lib = Library::new(library_path).unwrap();
+
+        println!("f0r_init {}", library_path);
+        unsafe {
+            let f0r_initor: Symbol<F0rInit> = lib.get(b"f0r_init").unwrap();
+            f0r_initor();
+        }
+
         println!("f0r_get_plugin_info");
         let mut raw_info = F0rPluginInfo {
             name: ptr::null(),
@@ -143,9 +158,9 @@ impl F0rWrapper {
             explanation: ptr::null(),
         };
 
-        let mut name = String::from("foo2");
-        let mut author = String::from("bar2");
-        let mut explanation = String::from("none2");
+        let name;
+        let author;
+        let explanation;
         unsafe {
             let f0r_get_plugin_infor: Symbol<F0rGetPluginInfo> = lib.get(b"f0r_get_plugin_info").unwrap();
             // Need to write a Default for this to work?
@@ -157,41 +172,41 @@ impl F0rWrapper {
         }
 
         F0rWrapper {
-            raw_info,
+            library_path: library_path.to_string(),
+            lib,
             name,
             author,
             explanation,
+            raw_info,
+        }
+    }
+
+    fn instance(&self, width: u32, height: u32) -> F0rInstanceWrapper {
+        let f0r_instance;
+        unsafe {
+            /*
+            let t0 = CString::new("abc").unwrap();
+            let t0_ptr = t0.into_raw();
+            let t1 = CString::from_raw(t0_ptr);
+            println!("cstring test {:?}", t1);
+            */
+
+            let f0r_constructor: Symbol<F0rConstruct> = self.lib.get(b"f0r_construct").unwrap();
+            f0r_instance = f0r_constructor(width, height);
+        }
+        F0rInstanceWrapper {
+            f0r_instance,
         }
     }
 }
 
 fn main() {
     let library_path = "/usr/lib/frei0r-1/saturat0r.so";  // env::args().nth(1).expect("USAGE: loading <LIB>");
-    println!("loading {}", library_path);
 
-    let lib = Library::new(library_path).unwrap();
+    let f0r = F0rWrapper::default(&library_path);
+    f0r.print();
 
     let width = 8;
-    let height = 8;
-
-    unsafe {
-        println!("f0r_init");
-        let f0r_initor: Symbol<F0rInit> = lib.get(b"f0r_init").unwrap();
-        f0r_initor();
-
-        /*
-        let t0 = CString::new("abc").unwrap();
-        let t0_ptr = t0.into_raw();
-        let t1 = CString::from_raw(t0_ptr);
-        println!("cstring test {:?}", t1);
-        */
-
-        let f0r = F0rWrapper::default(&lib);
-        f0r.print();
-
-        let f0r_constructor: Symbol<F0rConstruct> = lib.get(b"f0r_construct").unwrap();
-        let _instance = f0r_constructor(width, height);
-
-        println!("done with frei0r");
-    }
+    let height = 4;
+    let _f0r_inst = f0r.instance(width, height);
 }
