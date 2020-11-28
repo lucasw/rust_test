@@ -2,6 +2,7 @@ extern crate image;
 extern crate libloading;
 
 use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage};
+use std::convert::TryFrom;
 // use std::env;
 use libloading::{Library, Symbol};
 // use std::ffi::CString;
@@ -54,6 +55,8 @@ type F0rUpdate = fn(F0rInstance, f64, *const u32, *mut u32);
 pub struct F0rInstanceWrapper {
     f0r_instance: F0rInstance,
     f0r_update: F0rUpdate,
+    width: usize,
+    height: usize,
 }
 
 fn vec8to32(vec8: &Vec<u8>) -> Vec<u32> {
@@ -101,10 +104,30 @@ impl F0rInstanceWrapper {
         println!("vec32 out 1 {}", vec32_out.len());
         // TODO(lucasw) this is segfaulting
         (self.f0r_update)(self.f0r_instance, time, vec32.as_ptr(), vec32_out.as_mut_ptr());
+
         println!("vec32 out 2 {}", vec32_out.len());
         let vec8_out = vec32to8(&vec32_out);
         println!("converted {} {}", vec32_out.len(), vec8_out.len());
         vec8_out
+    }
+
+    fn update_test(&self) {
+        let mut vec32: Vec<u32> = vec![0; self.width * self.height];
+        let mut count = 0;
+        for pix in vec32.iter_mut() {
+            *pix = count;
+            print!("{} ", pix);
+            count += 1;
+        }
+        println!("");
+
+        let mut vec32_out: Vec<u32> = vec![0; vec32.len()];
+        (self.f0r_update)(self.f0r_instance, 0.0, vec32.as_ptr(), vec32_out.as_mut_ptr());
+
+        for pix in vec32_out.iter() {
+            print!("{} ", pix);
+        }
+        println!("");
     }
 
     // TODO(lucasw) need a Drop to deconstruct this instance
@@ -206,6 +229,8 @@ impl F0rWrapper {
         F0rInstanceWrapper {
             f0r_instance: f0r_instance,
             f0r_update: *f0r_update,
+            width: usize::try_from(width).unwrap(),
+            height: usize::try_from(height).unwrap(),
         }
     }
 }
@@ -219,13 +244,16 @@ fn main() {
     // TODO(lucasw) pass this in from a command line
     let img_name = "/home/lucasw/catkin_ws/src/lucasw/vimjay/data/slowmo/frame01294_sm.png";
     // TODO(lucasw) handle the case where this isn't found
-    let img = image::open(img_name).unwrap();
-
-    let (width, height) = img.dimensions();
+    //let img = image::open(img_name).unwrap();
+    // let (width, height) = img.dimensions();
+    //
+    let width = 8;
+    let height = 8;
     let f0r_inst = f0r.instance(width, height);
-    // let rgb: Vec<u8> = img.raw_pixels();
-    let rgb: Vec<u8> = img.into_rgb8().to_vec();
-    let rgb_out = f0r_inst.update(0.0, rgb);
+    f0r_inst.update_test();
+
+    // let rgb: Vec<u8> = img.into_rgb8().to_vec();
+    // let rgb_out = f0r_inst.update(0.0, rgb);
 
     // image::save_buffer("test_out.png", &rgb_out, width, height, image::ColorType::Rgb8).unwrap();
 }
