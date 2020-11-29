@@ -51,10 +51,13 @@ pub struct F0rPluginInfo {
 }
 
 type F0rUpdate = fn(F0rInstance, f64, *const u32, *mut u32);
+pub type f0r_param_t = *mut ::std::os::raw::c_void;
+pub type F0rSetParamValue = fn(F0rInstance, f0r_param_t, ::std::os::raw::c_int);
 
 pub struct F0rInstanceWrapper {
     f0r_instance: F0rInstance,
     f0r_update: F0rUpdate,
+    f0r_set_param_value: F0rSetParamValue,
     width: usize,
     height: usize,
 }
@@ -120,6 +123,13 @@ impl F0rInstanceWrapper {
             count += 1;
         }
         println!("");
+
+        let mut val: f64 = 0.1;
+        unsafe {
+            let val_ptr: *mut ::std::os::raw::c_void = &mut val as *mut _ as *mut ::std::os::raw::c_void;
+
+            (self.f0r_set_param_value)(self.f0r_instance, val_ptr, 0);
+        }
 
         let mut vec32_out: Vec<u32> = vec![0; vec32.len()];
         (self.f0r_update)(self.f0r_instance, 0.0, vec32.as_ptr(), vec32_out.as_mut_ptr());
@@ -226,9 +236,15 @@ impl F0rWrapper {
             f0r_update = self.lib.get(b"f0r_update").unwrap();
         }
 
+        let f0r_set_param_value: Symbol<F0rSetParamValue>;
+        unsafe {
+            f0r_set_param_value = self.lib.get(b"f0r_set_param_value").unwrap();
+        }
+
         F0rInstanceWrapper {
             f0r_instance: f0r_instance,
             f0r_update: *f0r_update,
+            f0r_set_param_value: *f0r_set_param_value,
             width: usize::try_from(width).unwrap(),
             height: usize::try_from(height).unwrap(),
         }
