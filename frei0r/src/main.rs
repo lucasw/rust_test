@@ -1,7 +1,8 @@
 extern crate image;
 extern crate libloading;
 
-use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage};
+// use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage};
+use image::{GenericImageView};
 use std::convert::TryFrom;
 // use std::env;
 use libloading::{Library, Symbol};
@@ -51,8 +52,8 @@ pub struct F0rPluginInfo {
 }
 
 type F0rUpdate = fn(F0rInstance, f64, *const u32, *mut u32);
-pub type f0r_param_t = *mut ::std::os::raw::c_void;
-pub type F0rSetParamValue = fn(F0rInstance, f0r_param_t, ::std::os::raw::c_int);
+pub type F0rParamT = *mut ::std::os::raw::c_void;
+pub type F0rSetParamValue = fn(F0rInstance, F0rParamT, ::std::os::raw::c_int);
 
 pub struct F0rInstanceWrapper {
     f0r_instance: F0rInstance,
@@ -63,39 +64,41 @@ pub struct F0rInstanceWrapper {
 }
 
 fn vec8to32(vec8: &Vec<u8>) -> Vec<u32> {
+    let ratio = mem::size_of::<u32>() / mem::size_of::<u8>();
+    let length = vec8.len() / ratio;
+    let capacity = vec8.capacity() / ratio;
     let vec32 = unsafe {
-        let ratio = mem::size_of::<u32>() / mem::size_of::<u8>();
-
-        let length = vec8.len() / ratio;
-        let capacity = vec8.capacity() / ratio;
         // let ptr = vec8.as_mut_ptr() as *mut u32;
         let ptr = vec8.as_ptr() as *mut u32;
 
         // Don't run the destructor for vec32
-        mem::forget(vec8);
+        // mem::forget(vec8);
 
         // Construct new Vec
         Vec::from_raw_parts(ptr, length, capacity)
     };
-    vec32
+    let vec32b = vec32.clone();
+    mem::forget(vec32);
+    vec32b
 }
 
 fn vec32to8(vec32: &Vec<u32>) -> Vec<u8> {
+    let ratio = mem::size_of::<u32>() / mem::size_of::<u8>();
+    let length = vec32.len() * ratio;
+    let capacity = vec32.capacity() * ratio;
     let vec8 = unsafe {
-        let ratio = mem::size_of::<u32>() / mem::size_of::<u8>();
 
-        let length = vec32.len() * ratio;
-        let capacity = vec32.capacity() * ratio;
         // let ptr = vec32.as_mut_ptr() as *mut u8;
         let ptr = vec32.as_ptr() as *mut u8;
-
-        // Don't run the destructor for vec32
-        mem::forget(vec32);
 
         // Construct new Vec
         Vec::from_raw_parts(ptr, length, capacity)
     };
-    vec8
+    let vec8b = vec8.clone();
+    // vec8 destructor would also destroy the passed in vec32- use a box or arc to handle that
+    // instead?
+    mem::forget(vec8);
+    vec8b
 }
 
 impl F0rInstanceWrapper {
@@ -117,29 +120,65 @@ impl F0rInstanceWrapper {
     fn update_test(&self) {
         let mut vec32: Vec<u32> = vec![0; self.width * self.height];
         let mut count = 0;
+        println!("vec32 {} {:p}", vec32.len(), &vec32);
         for pix in vec32.iter_mut() {
-            *pix = count;
-            print!("{} ", pix);
+            *pix = count << 8;
+            print!("{:08X?} ", pix);
             count += 1;
+
+            if count % 4 == 0 {
+                println!("");
+            }
         }
         println!("");
 
-        let mut val: f64 = 0.1;
-        unsafe {
-            let val_ptr: *mut ::std::os::raw::c_void = &mut val as *mut _ as *mut ::std::os::raw::c_void;
-
-            (self.f0r_set_param_value)(self.f0r_instance, val_ptr, 0);
+        // TODO(lucasw) these are leaking memory
+        let vec8 = vec32to8(&vec32);
+        println!("vec32to8 {} {:p}", vec8.len(), &vec8);
+        count = 0;
+        for pix in vec8.iter() {
+            print!("{:02X?} ", pix);
+            count += 1;
+            if count % 4 == 0 {
+                print!(" ");
+            }
+            if count % 16 == 0 {
+                println!("");
+            }
         }
+        println!("");
+/*
+        let vec32b = vec8to32(&vec8);
+        println!("vec8to32b {}", vec32b.len());
+        count = 0;
+        for pix in vec32.iter() {
+            print!("{:08X?} ", pix);
+            count += 1;
+        }
+        println!("");
+*/
+        self.set_param_value(0.1, 0);
 
         let mut vec32_out: Vec<u32> = vec![0; vec32.len()];
         (self.f0r_update)(self.f0r_instance, 0.0, vec32.as_ptr(), vec32_out.as_mut_ptr());
 
+        println!("f0r update output vec32 {}", vec32_out.len());
+        count = 0;
         for pix in vec32_out.iter() {
-            print!("{} ", pix);
+            print!("{:08X?} ", pix);
+            count += 1;
+            if count % 4 == 0 {
+                println!("");
+            }
         }
         println!("");
     }
 
+    fn set_param_value(&self, val_arg: f64, ind: i32) {
+        let mut val: f64 = val_arg;
+        let val_ptr: *mut ::std::os::raw::c_void = &mut val as *mut _ as *mut ::std::os::raw::c_void;
+        (self.f0r_set_param_value)(self.f0r_instance, val_ptr, ind);
+    }
     // TODO(lucasw) need a Drop to deconstruct this instance
 }
 
@@ -256,20 +295,22 @@ fn main() {
 
     let f0r = F0rWrapper::default(&library_path);
     f0r.print();
-
-    // TODO(lucasw) pass this in from a command line
-    let img_name = "/home/lucasw/catkin_ws/src/lucasw/vimjay/data/slowmo/frame01294_sm.png";
-    // TODO(lucasw) handle the case where this isn't found
-    //let img = image::open(img_name).unwrap();
-    // let (width, height) = img.dimensions();
-    //
     let width = 8;
     let height = 8;
     let f0r_inst = f0r.instance(width, height);
     f0r_inst.update_test();
 
-    // let rgb: Vec<u8> = img.into_rgb8().to_vec();
-    // let rgb_out = f0r_inst.update(0.0, rgb);
-
-    // image::save_buffer("test_out.png", &rgb_out, width, height, image::ColorType::Rgb8).unwrap();
+    println!("now try real image");
+    // TODO(lucasw) pass this in from a command line
+    let img_name = "/home/lucasw/catkin_ws/src/lucasw/vimjay/data/slowmo/frame01294_sm.png";
+    // TODO(lucasw) handle the case where this isn't found
+    // TODO(lucasw) need to force alpha channel on this
+    let img = image::open(img_name).unwrap();
+    let (width, height) = img.dimensions();
+    let rgba: Vec<u8> = img.into_rgba8().to_vec();
+    image::save_buffer("test_in.png", &rgba, width, height, image::ColorType::Rgba8).unwrap();
+    let f0r_inst = f0r.instance(width, height);
+    f0r_inst.set_param_value(0.04, 0);
+    let rgba_out = f0r_inst.update(0.0, rgba);
+    image::save_buffer("test_out.png", &rgba_out, width, height, image::ColorType::Rgba8).unwrap();
 }
