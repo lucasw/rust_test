@@ -93,6 +93,8 @@ endfunction(rust_target)
 rust_target(hello_world1)
 rust_target(log_test)
 rust_target(image_sub_pub)
+rust_target(serial_client)
+rust_target(serial_host)
 
 # target is imported and does not build here
 # add_custom_command(TARGET hello_world1 POST_BUILD

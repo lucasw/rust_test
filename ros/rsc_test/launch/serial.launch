@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- rostopic pub /string std_msgs/String "data: 'afdklj'" -r 0.5 -->
+
+  <node name="serial_loopback" pkg="rsc_test" type="serial_socat.sh" output="screen" >
+  </node>
+
+  <node name="serial_client" pkg="rsc_test" type="serial_client" output="screen" >
+  </node>
+
+  <node name="serial_host" pkg="rsc_test" type="serial_host" output="screen" >
+  </node>
+
+</launch>
