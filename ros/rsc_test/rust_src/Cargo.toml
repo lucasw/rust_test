@@ -18,9 +18,19 @@ path = "src/loginfo/main.rs"
 name = "image_sub_pub"
 path = "src/image_sub_pub/main.rs"
 
+[[bin]]
+name = "serial_client"
+path = "src/serial_test/client.rs"
+
+[[bin]]
+name = "serial_host"
+path = "src/serial_test/host.rs"
+
 [dependencies]
 rosrust = { git = "https://github.com/lucasw/rosrust", branch = "noetic_aggregated" }
 rosrust_msg = { git = "https://github.com/lucasw/rosrust", branch = "noetic_aggregated" }
+# serialport = "3.3.0"
+serial = "0.4.0"
 # rosrust_msg = "0.1.1"
 # rosrust = { path = "../../../../rosrust/rosrust" }
 # rosrust_msg = { path = "../../../../rosrust/rosrust_msg" }
