@@ -42,4 +42,15 @@ fn main() {
     };
 
     print_leaf(&l2);
+
+    // this still works, l2 doesn't own l1 now?
+    print_leaf(&l1);
+
+    // this also works, further proof l2 doesn't own l1 or l0
+    let l3 = Leaf {
+        val: 3,
+        left: Some(&l0),
+        right: Some(&l1),
+    };
+
 }
