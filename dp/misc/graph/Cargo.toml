@@ -1,0 +1,9 @@
+[package]
+name = "graph"
+version = "0.0.1"
+authors = ["Lucas Walter <wsacul@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+# rand = "0.7.3"
+uuid = { version = "0.8", features = ["v4"] }
