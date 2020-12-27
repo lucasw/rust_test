@@ -65,6 +65,9 @@ fn main() {
         smorse_to_words.entry(smorse_word).or_default().push(word);
     }
 
+    /* The sequence -...-....-.--. is the code for four different words (needing, nervate, niding, tiling).
+     * Find the only sequence that's the code for 13 different words.
+     */
     let mut smorse_counts : HashMap<usize, Vec<String>> = HashMap::new();
     for (smorse_word, words) in smorse_to_words.iter() {
         smorse_counts.entry(words.len()).or_default().push(smorse_word.to_string());
@@ -81,20 +84,91 @@ fn main() {
             let words = smorse_to_words.get(smorse_word).unwrap();
             println!("{}  {:?}", smorse_word, words);
         }
-        if count < 8 {
+        if count < 11 {
             break;
         }
     }
 
-    /*
-The sequence -...-....-.--. is the code for four different words (needing, nervate, niding, tiling). Find the only sequence that's the code for 13 different words.
+    /* autotomous encodes to .-..--------------..-..., which has 14 dashes in a row.
+     * Find the only word that has 15 dashes in a row.
+     */
+    let mut smorse_lengths : HashMap<usize, Vec<String>> = HashMap::new();
+    for smorse_word in smorse_to_words.keys() {
+        smorse_lengths.entry(smorse_word.chars().count()).or_default().push(smorse_word.to_string());
+    }
 
-autotomous encodes to .-..--------------..-..., which has 14 dashes in a row. Find the only word that has 15 dashes in a row.
+    let mut lengths = smorse_lengths.keys().copied().collect::<Vec<usize>>();
+    lengths.sort();
+    lengths.reverse();
 
-Call a word perfectly balanced if its code has the same number of dots as dashes. counterdemonstrations is one of two 21-letter words that's perfectly balanced. Find the other one.
+    println!("lengths {}, {}", lengths.len(), lengths[0]);
+    let mut best_dash_count = 0;
+    let mut best_dash_word;
+    for i in (20..lengths[0] + 1).rev() {
+        if !smorse_lengths.contains_key(&i) {
+            continue;
+        }
+        let smorse_words = smorse_lengths.get(&i).unwrap();
+        println!("smorse length {}, num smorse words {}", i, smorse_words.len());
+        for smorse_word in smorse_words {
+            let mut dash_count = 0;
+            for c in smorse_word.chars() {
+                match c {
+                    '-' => {
+                        dash_count += 1;
+                        if dash_count > best_dash_count {
+                            println!("{} {} {:?}", best_dash_count, smorse_word,
+                                     smorse_to_words.get(smorse_word).unwrap());
+                            best_dash_count = dash_count;
+                            best_dash_word = smorse_word;
+                        }
+                    }
+                    '.' => dash_count = 0,
+                    _ => panic!("unexpected non-morse char {} {}", c, smorse_word),
+                }
+            }
+        }
+    }
 
-protectorate is 12 letters long and encodes to .--..-.----.-.-.----.-..--., which is a palindrome (i.e. the string is the same when reversed). Find the only 13-letter word that encodes to a palindrome.
+    println!("Call a word perfectly balanced if its code has the same number of dots as dashes.");
+    println!("counterdemonstrations is one of two 21-letter words that's perfectly balanced. Find the other one.");
+    for len in smorse_lengths.keys().filter(|len| *len % 2 == 0) {
+        let smorse_words = smorse_lengths.get(len).unwrap();
 
---.---.---.-- is one of five 13-character sequences that does not appear in the encoding of any word. Find the other four.
-*/
+        for smorse_word in smorse_words {
+            let words = smorse_to_words.get(smorse_word).unwrap();
+            let mut words21 = Vec::new();
+            // TODO(lucasw) it would be more efficient to start with words of length 21
+            for word in words {
+                if word.chars().count() == 21 {
+                    words21.push(word);
+                }
+            }
+            if words21.len() == 0 {
+                continue;
+            }
+
+            let mut dash_count = 0;
+            let mut dot_count = 0;
+            for c in smorse_word.chars() {
+                match c {
+                    '-' => dash_count += 1,
+                    '.' => dot_count += 1,
+                    _ => panic!("unexpected non-morse char {} {}", c, smorse_word),
+                }
+            }
+            if dash_count == dot_count {
+                println!("{} {} {} {:?}", dash_count, dot_count, smorse_word, words21);
+            }
+        }
+    }
+
+    /* protectorate is 12 letters long and encodes to .--..-.----.-.-.----.-..--.,
+     * which is a palindrome (i.e. the string is the same when reversed).
+     * Find the only 13-letter word that encodes to a palindrome.
+     */
+
+    /* --.---.---.-- is one of five 13-character sequences that does not appear in the encoding of any word.
+     * Find the other four.
+     */
 }
