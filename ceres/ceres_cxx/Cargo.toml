@@ -1,0 +1,12 @@
+[package]
+name = "ceres_cxx"
+version = "0.1.0"
+authors = ["Lucas Walter <wsacul@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cxx = "1.0"
+
+[build-dependencies]
+cxx-build = "1.0"
+pkg-config = "0.3.19"
