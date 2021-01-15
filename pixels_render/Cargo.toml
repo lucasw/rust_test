@@ -1,0 +1,15 @@
+[package]
+name = "pixels_render"
+version = "0.1.0"
+authors = ["Lucas Walter <wsacul@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+# byteorder = "1.3"
+# env_logger = "0.8"
+# getrandom = "0.2"
+# log = "0.4"
+pixels = "0.2.0"
+# randomize = "3.0"
+winit = "0.24"
+winit_input_helper = "0.9"
