@@ -20,6 +20,8 @@ fn main() {
 
     let mut frame_count: u32 = 0;
 
+    let mut right_key = false;
+
     event_loop.run(move |event, _, control_flow| {
         // The one and only event that winit_input_helper doesn't have for us...
         if let Event::RedrawRequested(_) = event {
@@ -63,8 +65,11 @@ fn main() {
             if input.key_pressed(VirtualKeyCode::P) {
                 paused = !paused;
             }
-            if input.key_held(VirtualKeyCode::Left) {
-                frame_count -= 1;
+            if input.key_pressed(VirtualKeyCode::Left) {
+                right_key = true;
+            }
+            if input.key_released(VirtualKeyCode::Left) {
+                right_key = false;
             }
             if input.key_held(VirtualKeyCode::Right) {
                 frame_count += 1;
@@ -80,6 +85,10 @@ fn main() {
             }
 
             window.request_redraw();
+        }
+
+        if right_key {
+            frame_count -= 1;
         }
     });
 }
