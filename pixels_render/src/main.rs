@@ -1,6 +1,6 @@
 use byteorder::{WriteBytesExt, BigEndian};
 use pixels::{Error, Pixels, SurfaceTexture};
-use std::{thread, time};
+use std::{cmp, thread, time};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -14,47 +14,128 @@ struct Point {
     y: u32,
 }
 
+// TODO(lucasw) later lines are indices into a Point vector?
 struct Line {
     p0: Point,
     p1: Point,
     color: u32,
 }
 
-impl Line {
-    fn draw(screen: &mut [u8]) {
-
-    }
-}
-
 struct Scene {
     buffer: Vec<u32>,
-    width: usize,
-    height: usize,
+    width: u32,
+    height: u32,
+    lines: Vec<Line>,
 }
 
 impl Scene {
     fn new(width: usize, height: usize) -> Self {
         Self {
             buffer: vec![0; width * height],
-            width,
-            height,
+            width: width as u32,
+            height: height as u32,
+            lines: Scene::new_lines(),
+        }
+    }
+
+    fn new_lines() -> Vec<Line> {
+        let mut lines = Vec::new();
+
+        lines.push(Line { p0: Point { x: 100, y: 100 }, p1: Point { x: 130, y: 100 }, color: 0xff000000 });
+        lines.push(Line { p0: Point { x: 130, y: 100 }, p1: Point { x: 130, y: 180 }, color: 0x00ff0000 });
+        lines.push(Line { p0: Point { x: 130, y: 180 }, p1: Point { x: 100, y: 100 }, color: 0x0000ff00});
+
+        lines
+    }
+
+    // TODO(lucasw) make a struct to wrap buffer, width, & height
+    fn draw_point(buffer: &mut Vec<u32>, width: u32, height: u32, point: &Point, color: &u32) {
+        if point.x >= width { return; }
+        if point.y >= height { return; }
+        let ind = (point.y * width + point.x) as usize;
+        buffer[ind] = *color;
+    }
+
+    fn draw_line(buffer: &mut Vec<u32>, width: u32, height: u32, line: &Line) {
+        Scene::draw_point(buffer, width, height, &line.p0, &line.color);
+        Scene::draw_point(buffer, width, height, &line.p1, &line.color);
+
+        let x0 = line.p0.x as f32;
+        let x1 = line.p1.x as f32;
+        let y0 = line.p0.y as f32;
+        let y1 = line.p1.y as f32;
+
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+
+        // bresenham
+        // TODO(lucasw) factor out algorithm into function and swap x and y parameters as needed
+        if dx.abs() > dy.abs() {
+            let incr = dy as f32 / dx as f32;
+            let mut y;
+
+            let xs;
+            let xf;
+            if x0 < x1 {
+                xs = x0 as u32;
+                y = y0;
+                xf = x1 as u32;
+            } else {
+                xs = x1 as u32;
+                y = y1;
+                xf = x0 as u32;
+            }
+
+            for x in xs..xf {
+                let pt = Point { x, y: y as u32 };
+                Scene::draw_point(buffer, width, height, &pt, &line.color);
+                y += incr;
+            }
+        } else {
+            let incr = dx as f32 / dy as f32;
+            let mut x;
+
+            let ys;
+            let yf;
+            if y0 < y1 {
+                ys = y0 as u32;
+                x = x0;
+                yf = y1 as u32;
+            } else {
+                ys = y1 as u32;
+                x = x1;
+                yf = y0 as u32;
+            }
+
+            for y in ys..yf {
+                let pt = Point { x: x as u32, y };
+                Scene::draw_point(buffer, width, height, &pt, &line.color);
+                x += incr;
+            }
+        }
+
+    }
+
+    fn draw_lines(&mut self) {
+        for line in self.lines.iter_mut() {
+            Scene::draw_line(&mut self.buffer, self.width, self.height, &line);
         }
     }
 
     fn draw_background(&mut self) {
         for (count, pixel) in self.buffer.iter_mut().enumerate() {
-            let x = (count % self.width) as u32;
-            let y = (count / self.width) as u32;
+            // let x = count as u32 % self.width;
+            let y = count as u32 / self.width;
             let r = y % 0xff;
             let g = (y / 2) % 0xff;
             let b = (y / 4) % 0xff;
             // let color = [0, r, g, b];
-            *pixel = r << 24;  // | g << 16 | b << 8;
+            *pixel = r << 24 | g << 16 | b << 8;
             // *pixel = 0x00ffffff;
         }
     }
 
-    fn render(&self, screen: &mut [u8], frame_count: u32) {
+    fn render(&self, screen: &mut [u8], _frame_count: u32) {
         // TODO(lucasw) use a zip here with the buffer contents instead of buffer[count]
         for (count, mut pix) in screen.chunks_exact_mut(4).enumerate() {
             // downsample
@@ -83,6 +164,7 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         // The one and only event that winit_input_helper doesn't have for us...
         if let Event::RedrawRequested(_) = event {
+            scene.draw_lines();
             scene.render(pixels.get_frame(), frame_count);
 
             if pixels
