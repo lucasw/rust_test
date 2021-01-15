@@ -1,3 +1,4 @@
+use byteorder::{WriteBytesExt, BigEndian};
 use pixels::{Error, Pixels, SurfaceTexture};
 use std::{thread, time};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
@@ -8,8 +9,65 @@ use winit_input_helper::WinitInputHelper;
 const SCREEN_WIDTH: u32 = 320;
 const SCREEN_HEIGHT: u32 = 200;
 
+struct Point {
+    x: u32,
+    y: u32,
+}
+
+struct Line {
+    p0: Point,
+    p1: Point,
+    color: u32,
+}
+
+impl Line {
+    fn draw(screen: &mut [u8]) {
+
+    }
+}
+
+struct Scene {
+    buffer: Vec<u32>,
+    width: usize,
+    height: usize,
+}
+
+impl Scene {
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            buffer: vec![0; width * height],
+            width,
+            height,
+        }
+    }
+
+    fn draw_background(&mut self) {
+        for (count, pixel) in self.buffer.iter_mut().enumerate() {
+            let x = (count % self.width) as u32;
+            let y = (count / self.width) as u32;
+            let r = y % 0xff;
+            let g = (y / 2) % 0xff;
+            let b = (y / 4) % 0xff;
+            // let color = [0, r, g, b];
+            *pixel = r << 24;  // | g << 16 | b << 8;
+            // *pixel = 0x00ffffff;
+        }
+    }
+
+    fn render(&self, screen: &mut [u8], frame_count: u32) {
+        // TODO(lucasw) use a zip here with the buffer contents instead of buffer[count]
+        for (count, mut pix) in screen.chunks_exact_mut(4).enumerate() {
+            // downsample
+            let val = self.buffer[count] & 0xf8f8f8f8;
+            // pix.copy_from_slice(&val);
+            pix.write_u32::<BigEndian>(val).unwrap();
+        }
+    }
+}
+
 fn main() {
     let event_loop = EventLoop::new();
+    // TODO(lucasw) see if berylium sdl is better with keyboard input
     let mut input = WinitInputHelper::new();
     let (window, p_width, p_height, mut _hidpi_factor) =
         create_window("Pixels Render", &event_loop);
@@ -17,30 +75,15 @@ fn main() {
     let mut pixels = Pixels::new(SCREEN_WIDTH, SCREEN_HEIGHT, surface_texture).unwrap();
 
     let mut paused = false;
-
     let mut frame_count: u32 = 0;
-
     let mut right_key = false;
+    let mut scene = Scene::new(SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize);
+    scene.draw_background();
 
     event_loop.run(move |event, _, control_flow| {
         // The one and only event that winit_input_helper doesn't have for us...
         if let Event::RedrawRequested(_) = event {
-
-            // draw the pixels
-            {
-                let screen = pixels.get_frame();
-                let mut count: u32 = frame_count;
-                for pix in screen.chunks_exact_mut(4) {
-                    let r: u8 = (count % 0xff) as u8;
-                    let g: u8 = ((count / 2) % 0xff) as u8;
-                    let b: u8 = ((count / 4) % 0xff) as u8;
-                    let color = [0, r, g, b];
-                    pix.copy_from_slice(&color);
-
-                    count += 1;
-                }
-                // frame_count += 1;
-            }
+            scene.render(pixels.get_frame(), frame_count);
 
             if pixels
                 .render()
