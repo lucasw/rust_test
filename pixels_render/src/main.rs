@@ -287,15 +287,19 @@ impl Scene {
 
     fn update(&mut self) {
         // follow the player with the vew
-        {
+        if (true) {
             let dx = self.player.position.x - self.view.position.x;
             let dy = self.player.position.y - self.view.position.y;
-            let da = self.player.angle - self.view.angle - std::f32::consts::FRAC_PI_2;
-            println!("da {}", da);
+            let da = self.player.angle + self.view.angle - std::f32::consts::FRAC_PI_2;
+            self.view.position.x += dx *0.1;
+            self.view.position.y += dy *0.1;
+            self.view.angle -= da *0.1;
+            /*
             self.view.move_xya(&PosAngle{
                 position: Point {x: dx * 0.1, y: dy * 0.1},
                 angle: 0.0,  // da * 0.05,
             });
+            */
         }
 
         self.view.update();
@@ -375,11 +379,11 @@ fn main() {
 
             if input.key_held(VirtualKeyCode::Left) || input.key_held(VirtualKeyCode::A) {
                 do_move = true;
-                dxya.position.x -= 2.0;
+                dxya.position.x -= 0.5;
             }
             if input.key_held(VirtualKeyCode::Right) || input.key_held(VirtualKeyCode::D) {
                 do_move = true;
-                dxya.position.x += 2.0;
+                dxya.position.x += 0.5;
             }
 
             if input.key_held(VirtualKeyCode::Up) || input.key_held(VirtualKeyCode::W) {
@@ -388,7 +392,7 @@ fn main() {
             }
             if input.key_held(VirtualKeyCode::Down) || input.key_held(VirtualKeyCode::S) {
                 do_move = true;
-                dxya.position.y += 2.0;
+                dxya.position.y += 1.0;
             }
 
             if input.key_held(VirtualKeyCode::Q) {
@@ -398,6 +402,13 @@ fn main() {
             if input.key_held(VirtualKeyCode::E) {
                 do_move = true;
                 dxya.angle -= 0.04;
+            }
+
+            if input.key_held(VirtualKeyCode::J) {
+                scene.view.angle -= 0.04;
+            }
+            if input.key_held(VirtualKeyCode::K) {
+                scene.view.angle += 0.04;
             }
 
             // Adjust high DPI factor
