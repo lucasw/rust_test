@@ -1,6 +1,6 @@
 use byteorder::{WriteBytesExt, BigEndian};
-use pixels::{Error, Pixels, SurfaceTexture};
-use std::{cmp, thread, time};
+use pixels::{Pixels, SurfaceTexture};
+use std::{thread, time};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -11,9 +11,19 @@ const SCREEN_HEIGHT: u32 = 200;
 
 // TODO(lucasw) consider nalgrebra in the future
 
+#[derive(Clone, Copy)]
 struct Point {
     x: f32,
     y: f32,
+}
+
+impl Point {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+        }
+    }
 }
 
 // TODO(lucasw) later lines are indices into a Point vector?
@@ -45,13 +55,14 @@ impl Rot2D {
         }
     }
 
-    fn set(&mut self, x: f32, y: f32, angle: f32) {
+    fn set(&mut self, position: &Point, angle: f32) {
+        // let angle = -angle;
         self.c00 = angle.cos();
         self.c01 = angle.sin();
         self.c10 = -angle.sin();
         self.c11 = angle.cos();
-        self.c20 = x;
-        self.c21 = y;
+        self.c20 = -position.x;
+        self.c21 = -position.y;
     }
 
     fn project(&self, pt: &Point) -> Point {
@@ -75,52 +86,62 @@ impl Rot2D {
     }
 }
 
+// TODO(lucasw) later make an entity object that contains a vector of lines
+// and a position and angle, so it can move and rotate about its center
+// within a scene
+struct PosAngle {
+    position: Point,
+    // store rotation matrix instead, compute out angle when needed (which is much less often
+    // than the matrix).
+    angle: f32,
+}
+
+impl PosAngle {
+    fn default() -> Self {
+        Self {
+            position: Point::default(),
+            angle: 0.0,
+        }
+    }
+}
+
 struct View {
     buffer: Vec<u32>,
     width: usize,
     height: usize,
-    x: f32,
-    y: f32,
+    position: Point,
     angle: f32,
     rot2d: Rot2D,
 }
 
 impl View {
-    fn new(width: usize, height: usize, x: f32, y: f32) -> Self {
+    fn new(width: usize, height: usize, position: Point) -> Self {
         let mut rot2d = Rot2D::new();
         let angle = 0.0;
-        rot2d.set(x, y, angle);
+        rot2d.set(&position, angle);
         Self {
             buffer: vec![0; width * height],
             width,
             height,
-            x,
-            y,
+            position,
             angle,
             rot2d,
         }
     }
 
     // TODO(lucasw) combine x and y move into one method
-    fn move_x(&mut self, dx: f32) {
+    fn move_xya(&mut self, dxya: &PosAngle) {
         let mut rot2d = Rot2D::new();
-        rot2d.set(0.0, 0.0, -self.angle);
-        let offset = rot2d.project(&Point { x: -dx, y: 0.0 });
+        rot2d.set(&Point::default(), self.angle);
+        let offset = rot2d.project(&dxya.position);
         // TODO(lucasw) Point add ops overloading
-        self.x += offset.x;
-        self.y += offset.y;
+        self.position.x += offset.x;
+        self.position.y += offset.y;
+        self.angle += dxya.angle;
     }
 
-    fn move_y(&mut self, dy: f32) {
-        let mut rot2d = Rot2D::new();
-        rot2d.set(0.0, 0.0, -self.angle);
-        let offset = rot2d.project(&Point { x: 0.0, y: -dy });
-        // TODO(lucasw) Point add ops overloading
-        self.x += offset.x;
-        self.y += offset.y;
-    }
-
-    fn draw_point(&mut self, point: &Point, color: &u32) {
+    // use screen coordinates here
+    fn draw_point_screen(&mut self, point: &Point, color: &u32) {
         if point.x < 0.0 { return; }
         if point.y < 0.0 { return; }
 
@@ -132,16 +153,18 @@ impl View {
         self.buffer[ind] = *color;
     }
 
+    // incoming line is map coordinates
     fn draw_line(&mut self, line: &Line) {
         let p0 = self.rot2d.project(&line.p0);
         let p1 = self.rot2d.project(&line.p1);
 
         let width = self.width as f32;
         let height = self.height as f32;
+        // convert to screen coordinates
         let x0 = p0.x as f32 + width / 2.0;
         let x1 = p1.x as f32 + width / 2.0;
-        let y0 = p0.y as f32 + height / 2.0;
-        let y1 = p1.y as f32 + height / 2.0;
+        let y0 = -p0.y as f32 + height / 2.0;
+        let y1 = -p1.y as f32 + height / 2.0;
 
         let dx = x1 - x0;
         let dy = y1 - y0;
@@ -166,7 +189,7 @@ impl View {
 
             for x in xs..xf {
                 let pt = Point { x: x as f32, y };
-                self.draw_point(&pt, &line.color);
+                self.draw_point_screen(&pt, &line.color);
                 y += incr;
             }
         } else {
@@ -187,7 +210,7 @@ impl View {
 
             for y in ys..yf {
                 let pt = Point { x, y: y as f32};
-                self.draw_point(&pt, &line.color);
+                self.draw_point_screen(&pt, &line.color);
                 x += incr;
             }
         }
@@ -207,7 +230,7 @@ impl View {
     }
 
     fn update(&mut self) {
-        self.rot2d.set(self.x, self.y, self.angle);
+        self.rot2d.set(&self.position, self.angle);
         // println!("{} {} {} {:?}", self.x, self.y, self.angle, self.rot2d);
     }
 
@@ -225,28 +248,56 @@ impl View {
 struct Scene {
     view: View,
     lines: Vec<Line>,
+    player: PosAngle,
 }
 
 impl Scene {
-    fn new(width: usize, height: usize, x: f32, y: f32) -> Self {
+    fn new(width: usize, height: usize, position: Point) -> Self {
         Self {
-            view: View::new(width, height, x, y),
+            view: View::new(width, height, position),
             lines: Scene::new_lines(),
+            player: PosAngle { position: Point::default(), angle: std::f32::consts::FRAC_PI_2 },
         }
     }
 
     fn new_lines() -> Vec<Line> {
         let mut lines = Vec::new();
 
-        lines.push(Line { p0: Point { x: -70.0, y: 70.0 }, p1: Point { x: 70.0, y: 70.0 }, color: 0xff000000 });
-        lines.push(Line { p0: Point { x: 70.0, y: 70.0 }, p1: Point { x: 70.0, y: -70.0 }, color: 0x00ff0000 });
-        lines.push(Line { p0: Point { x: 70.0, y: -70.0 }, p1: Point { x: -70.0, y: -70.0 }, color: 0x0000ff00});
-        lines.push(Line { p0: Point { x: -70.0, y: -70.0 }, p1: Point { x: -70.0, y: 70.0 }, color: 0x0000ff00});
+        let color = 0xaaaaaa00;
+        lines.push(Line { p0: Point { x: -70.0, y: 70.0 }, p1: Point { x: 70.0, y: 70.0 }, color });
+        lines.push(Line { p0: Point { x: 70.0, y: 70.0 }, p1: Point { x: 70.0, y: -70.0 }, color });
+        lines.push(Line { p0: Point { x: 70.0, y: -70.0 }, p1: Point { x: -70.0, y: -70.0 }, color });
+        lines.push(Line { p0: Point { x: -70.0, y: -70.0 }, p1: Point { x: -70.0, y: 70.0 }, color });
 
         lines
     }
 
+    fn player_move(&mut self, dxya: &PosAngle) {
+        // TODO(lucasw) need add ops, also matrix2d mult here
+        let angle = self.player.angle;
+        let player_y = Point { x: angle.cos(), y: angle.sin() };
+        let player_x = Point { x: angle.sin(), y: -angle.cos() };
+
+        let x = dxya.position.x;
+        let y = -dxya.position.y;
+        self.player.position.x += x * player_x.x + y * player_y.x;
+        self.player.position.y += x * player_x.y + y * player_y.y;
+        self.player.angle += dxya.angle;
+    }
+
     fn update(&mut self) {
+        // follow the player with the vew
+        {
+            let dx = self.player.position.x - self.view.position.x;
+            let dy = self.player.position.y - self.view.position.y;
+            let da = self.player.angle - self.view.angle - std::f32::consts::FRAC_PI_2;
+            println!("da {}", da);
+            self.view.move_xya(&PosAngle{
+                position: Point {x: dx * 0.1, y: dy * 0.1},
+                angle: 0.0,  // da * 0.05,
+            });
+        }
+
         self.view.update();
     }
 
@@ -254,6 +305,23 @@ impl Scene {
         self.view.draw_background();
         for line in self.lines.iter_mut() {
             self.view.draw_line(&line);
+        }
+
+        // draw the player as a line pointing in their view direction
+        {
+            let pos = self.player.position;
+            let angle = self.player.angle;
+            let len = 10.0;
+            let player_dir = Line {
+                p0: pos,
+                p1: Point {
+                    x: pos.x + len * angle.cos(),
+                    y: pos.y + len * angle.sin(),
+                },
+                color: 0x0022ff32,
+            };
+
+            self.view.draw_line(&player_dir);
         }
     }
 }
@@ -268,8 +336,7 @@ fn main() {
 
     let mut paused = false;
     let mut frame_count: u32 = 0;
-    let mut scene = Scene::new(SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize, 0.0, 0.0);
-    scene.view.draw_background();
+    let mut scene = Scene::new(SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize, Point::default());
 
     event_loop.run(move |event, _, control_flow| {
         // The one and only event that winit_input_helper doesn't have for us...
@@ -277,6 +344,7 @@ fn main() {
             scene.update();
             scene.draw();
             scene.view.render(pixels.get_frame(), frame_count);
+            frame_count += 1;
 
             if pixels
                 .render()
@@ -290,6 +358,9 @@ fn main() {
             thread::sleep(time::Duration::from_millis(33));
         }
 
+        let mut do_move = false;
+        let mut dxya = PosAngle::default();
+
         // For everything else, for let winit_input_helper collect events to build its state.
         // It returns `true` when it is time to update our game state and request a redraw.
         if input.update(&event) {
@@ -302,25 +373,31 @@ fn main() {
                 paused = !paused;
             }
 
-            if input.key_held(VirtualKeyCode::Left) {
-                scene.view.move_x(-2.0);
+            if input.key_held(VirtualKeyCode::Left) || input.key_held(VirtualKeyCode::A) {
+                do_move = true;
+                dxya.position.x -= 2.0;
             }
-            if input.key_held(VirtualKeyCode::Right) {
-                scene.view.move_x(2.0);
+            if input.key_held(VirtualKeyCode::Right) || input.key_held(VirtualKeyCode::D) {
+                do_move = true;
+                dxya.position.x += 2.0;
             }
 
-            if input.key_held(VirtualKeyCode::Up) {
-                scene.view.move_y(-2.0);
+            if input.key_held(VirtualKeyCode::Up) || input.key_held(VirtualKeyCode::W) {
+                do_move = true;
+                dxya.position.y -= 2.0;
             }
-            if input.key_held(VirtualKeyCode::Down) {
-                scene.view.move_y(2.0);
+            if input.key_held(VirtualKeyCode::Down) || input.key_held(VirtualKeyCode::S) {
+                do_move = true;
+                dxya.position.y += 2.0;
             }
 
             if input.key_held(VirtualKeyCode::Q) {
-                scene.view.angle += 0.04;
+                do_move = true;
+                dxya.angle += 0.04;
             }
             if input.key_held(VirtualKeyCode::E) {
-                scene.view.angle -= 0.04;
+                do_move = true;
+                dxya.angle -= 0.04;
             }
 
             // Adjust high DPI factor
@@ -333,6 +410,10 @@ fn main() {
             }
 
             window.request_redraw();
+        }
+
+        if do_move {
+            scene.player_move(&dxya);
         }
     });
 }
