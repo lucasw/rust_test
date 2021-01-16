@@ -287,7 +287,7 @@ impl Scene {
 
     fn update(&mut self) {
         // follow the player with the vew
-        if (true) {
+        if true {
             let dx = self.player.position.x - self.view.position.x;
             let dy = self.player.position.y - self.view.position.y;
             let da = self.player.angle + self.view.angle - std::f32::consts::FRAC_PI_2;
@@ -305,28 +305,43 @@ impl Scene {
         self.view.update();
     }
 
-    fn draw(&mut self) {
-        self.view.draw_background();
-        for line in self.lines.iter_mut() {
-            self.view.draw_line(&line);
-        }
-
+    fn draw_player(&mut self) {
         // draw the player as a line pointing in their view direction
-        {
-            let pos = self.player.position;
-            let angle = self.player.angle;
-            let len = 10.0;
-            let player_dir = Line {
+        let pos = self.player.position;
+        let angle = self.player.angle;
+        let len = 10.0;
+        let player_dir = Line {
+            p0: pos,
+            p1: Point {
+                x: pos.x + len * angle.cos(),
+                y: pos.y + len * angle.sin(),
+            },
+            color: 0x0022ff32,
+        };
+
+        self.view.draw_line(&player_dir);
+
+        for i in -10..10 {
+            let angle = angle + i as f32 * 0.08;
+            let len = 100.0;
+            let ray = Line {
                 p0: pos,
                 p1: Point {
                     x: pos.x + len * angle.cos(),
                     y: pos.y + len * angle.sin(),
                 },
-                color: 0x0022ff32,
+                color: 0x22ff3200,
             };
-
-            self.view.draw_line(&player_dir);
+            self.view.draw_line(&ray);
         }
+    }
+
+    fn draw(&mut self) {
+        self.view.draw_background();
+        for line in self.lines.iter_mut() {
+            self.view.draw_line(&line);
+        }
+        self.draw_player();
     }
 }
 
