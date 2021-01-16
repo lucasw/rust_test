@@ -21,49 +21,39 @@ struct Line {
     color: u32,
 }
 
-struct Scene {
+struct View {
     buffer: Vec<u32>,
     width: u32,
     height: u32,
-    lines: Vec<Line>,
+    x: f32,
+    y: f32,
 }
 
-impl Scene {
-    fn new(width: usize, height: usize) -> Self {
+impl View {
+    fn new(width: usize, height: usize, x: f32, y: f32) -> Self {
         Self {
             buffer: vec![0; width * height],
             width: width as u32,
             height: height as u32,
-            lines: Scene::new_lines(),
+            x,
+            y,
         }
     }
 
-    fn new_lines() -> Vec<Line> {
-        let mut lines = Vec::new();
-
-        lines.push(Line { p0: Point { x: 100, y: 100 }, p1: Point { x: 130, y: 100 }, color: 0xff000000 });
-        lines.push(Line { p0: Point { x: 130, y: 100 }, p1: Point { x: 130, y: 180 }, color: 0x00ff0000 });
-        lines.push(Line { p0: Point { x: 130, y: 180 }, p1: Point { x: 100, y: 100 }, color: 0x0000ff00});
-
-        lines
+    fn draw_point(&mut self, point: &Point, color: &u32) {
+        if point.x >= self.width { return; }
+        if point.y >= self.height { return; }
+        let ind = (point.y * self.width + point.x) as usize;
+        self.buffer[ind] = *color;
     }
 
-    // TODO(lucasw) make a struct to wrap buffer, width, & height
-    fn draw_point(buffer: &mut Vec<u32>, width: u32, height: u32, point: &Point, color: &u32) {
-        if point.x >= width { return; }
-        if point.y >= height { return; }
-        let ind = (point.y * width + point.x) as usize;
-        buffer[ind] = *color;
-    }
+    fn draw_line(&mut self, line: &Line) {
+        // TODO(lucasw) project line into view space
 
-    fn draw_line(buffer: &mut Vec<u32>, width: u32, height: u32, line: &Line) {
-        Scene::draw_point(buffer, width, height, &line.p0, &line.color);
-        Scene::draw_point(buffer, width, height, &line.p1, &line.color);
-
-        let x0 = line.p0.x as f32;
-        let x1 = line.p1.x as f32;
-        let y0 = line.p0.y as f32;
-        let y1 = line.p1.y as f32;
+        let x0 = line.p0.x as f32 - self.x;
+        let x1 = line.p1.x as f32 - self.x;
+        let y0 = line.p0.y as f32 - self.y;
+        let y1 = line.p1.y as f32 - self.y;
 
         let dx = x1 - x0;
         let dy = y1 - y0;
@@ -88,7 +78,7 @@ impl Scene {
 
             for x in xs..xf {
                 let pt = Point { x, y: y as u32 };
-                Scene::draw_point(buffer, width, height, &pt, &line.color);
+                self.draw_point(&pt, &line.color);
                 y += incr;
             }
         } else {
@@ -109,16 +99,9 @@ impl Scene {
 
             for y in ys..yf {
                 let pt = Point { x: x as u32, y };
-                Scene::draw_point(buffer, width, height, &pt, &line.color);
+                self.draw_point(&pt, &line.color);
                 x += incr;
             }
-        }
-
-    }
-
-    fn draw_lines(&mut self) {
-        for line in self.lines.iter_mut() {
-            Scene::draw_line(&mut self.buffer, self.width, self.height, &line);
         }
     }
 
@@ -146,6 +129,36 @@ impl Scene {
     }
 }
 
+struct Scene {
+    view: View,
+    lines: Vec<Line>,
+}
+
+impl Scene {
+    fn new(width: usize, height: usize, x: f32, y: f32) -> Self {
+        Self {
+            view: View::new(width, height, x, y),
+            lines: Scene::new_lines(),
+        }
+    }
+
+    fn new_lines() -> Vec<Line> {
+        let mut lines = Vec::new();
+
+        lines.push(Line { p0: Point { x: 100, y: 100 }, p1: Point { x: 130, y: 100 }, color: 0xff000000 });
+        lines.push(Line { p0: Point { x: 130, y: 100 }, p1: Point { x: 130, y: 180 }, color: 0x00ff0000 });
+        lines.push(Line { p0: Point { x: 130, y: 180 }, p1: Point { x: 100, y: 100 }, color: 0x0000ff00});
+
+        lines
+    }
+
+    fn draw_lines(&mut self) {
+        for line in self.lines.iter_mut() {
+            self.view.draw_line(&line);
+        }
+    }
+}
+
 fn main() {
     let event_loop = EventLoop::new();
     // TODO(lucasw) see if berylium sdl is better with keyboard input
@@ -157,15 +170,15 @@ fn main() {
 
     let mut paused = false;
     let mut frame_count: u32 = 0;
-    let mut right_key = false;
-    let mut scene = Scene::new(SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize);
-    scene.draw_background();
+    let mut scene = Scene::new(SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize, 0.0, 0.0);
+    scene.view.draw_background();
 
     event_loop.run(move |event, _, control_flow| {
         // The one and only event that winit_input_helper doesn't have for us...
         if let Event::RedrawRequested(_) = event {
+            scene.view.draw_background();
             scene.draw_lines();
-            scene.render(pixels.get_frame(), frame_count);
+            scene.view.render(pixels.get_frame(), frame_count);
 
             if pixels
                 .render()
@@ -190,14 +203,19 @@ fn main() {
             if input.key_pressed(VirtualKeyCode::P) {
                 paused = !paused;
             }
-            if input.key_pressed(VirtualKeyCode::Left) {
-                right_key = true;
-            }
-            if input.key_released(VirtualKeyCode::Left) {
-                right_key = false;
+
+            if input.key_held(VirtualKeyCode::Left) {
+                scene.view.x -= 2.0;
             }
             if input.key_held(VirtualKeyCode::Right) {
-                frame_count += 1;
+                scene.view.x += 2.0;
+            }
+
+            if input.key_held(VirtualKeyCode::Up) {
+                scene.view.y -= 2.0;
+            }
+            if input.key_held(VirtualKeyCode::Down) {
+                scene.view.y += 2.0;
             }
 
             // Adjust high DPI factor
@@ -210,10 +228,6 @@ fn main() {
             }
 
             window.request_redraw();
-        }
-
-        if right_key {
-            frame_count -= 1;
         }
     });
 }
