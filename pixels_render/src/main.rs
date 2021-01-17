@@ -57,6 +57,10 @@ impl Line {
         }
     }
 
+    fn reverse(&self) -> Line {
+        Line::new(self.p1, self.p0)
+    }
+
     fn delta(&self) -> Point {
         Point {
             x: self.p1.x - self.p0.x,
@@ -81,22 +85,63 @@ impl Line {
         d0.x * d1.x + d0.y * d1.y
     }
 
-    fn project(&self, unit_ray: &Line) -> Line {
-        let dist_to_corner = self.dot(unit_ray);
-        unit_ray.scale(dist_to_corner)
+    // TODO(lucasw) could cache this
+    fn len(&self) -> f32 {
+        self.dot(self).sqrt()
     }
 
-    fn is_intersection(unit_ray: &Line, line: &Line) -> (bool, Line, Line) {
-       let l0 = Line::new(unit_ray.p0, line.p0).project(unit_ray);
-       let right_angle_ray0 = Line::new(l0.p1, line.p0);
-       let l1 = Line::new(unit_ray.p0, line.p1).project(unit_ray);
-       let right_angle_ray1 = Line::new(l1.p1, line.p1);
+    // make a Line of length 1 out of self
+    fn unit(&self) -> Line {
+        self.scale(1.0 / self.len())
+    }
+
+    fn project(&self, unit_ray: &Line) -> Line {
+        let dist_to_corner = self.dot(unit_ray);
+        let base_ray = unit_ray.scale(dist_to_corner);
+        base_ray
+    }
+
+    fn project_not_unit_ray(&self, not_unit_ray: &Line) -> Line {
+        let unit_ray = not_unit_ray.unit();
+        let dist_to_corner = self.dot(&unit_ray);
+        let base_ray = unit_ray.scale(dist_to_corner);
+        base_ray
+    }
+
+    fn project2(&self, unit_ray: &Line) -> (f32, Line, Line) {
+        let dist_to_corner = self.dot(unit_ray);
+        let base_ray = unit_ray.scale(dist_to_corner);
+        let right_angle_ray = Line::new(base_ray.p1, self.p1);
+        (dist_to_corner, base_ray, right_angle_ray)
+    }
+
+    // TODO(lucasw) return Option
+    fn find_intersection(unit_ray: &Line, line: &Line) -> (bool, Line) {
+       let (d0, l0, right_angle_ray0) = Line::new(unit_ray.p0, line.p0).project2(unit_ray);
+       let (d1, l1, right_angle_ray1) = Line::new(unit_ray.p0, line.p1).project2(unit_ray);
        // make sure one end of the line is in the same direction as the unit_ray,
        // and that the unit ray is between the rays to either line end
+       let maybe_intersection = (l0.dot(unit_ray) > 0.0 || l1.dot(unit_ray) > 0.0) &&
+                                 right_angle_ray0.dot(&right_angle_ray1) < 0.0;
+
+       let r_dist0 = right_angle_ray0.len();
+       let r_dist1 = right_angle_ray1.len();
+       let intersection_dist;
+       if d1 > d0 {
+           intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
+       } else {
+           intersection_dist = d1 + (d0 - d1) * r_dist1 / (r_dist0 + r_dist1);
+       }
+       let is_intersection = maybe_intersection && intersection_dist > 0.0;
+
+       let intersection = unit_ray.scale(intersection_dist);
        (
-           (l0.dot(unit_ray) > 0.0 || l1.dot(unit_ray) > 0.0) && right_angle_ray0.dot(&right_angle_ray1) < 0.0,
+           is_intersection,
+           intersection,
+           /*
            right_angle_ray0,
            right_angle_ray1,
+           */
         )
     }
 }
@@ -332,11 +377,12 @@ impl Scene {
         let mut lines = Vec::new();
 
         let color = 0xaaaaaa00;
-        lines.push(Line { p0: Point { x: -70.0, y: 70.0 }, p1: Point { x: 70.0, y: 70.0 }, color });
+        let sz = 50.0;
+        lines.push(Line { p0: Point { x: -sz, y: sz }, p1: Point { x: sz, y: sz }, color });
         /*
-        lines.push(Line { p0: Point { x: 70.0, y: 70.0 }, p1: Point { x: 70.0, y: -70.0 }, color });
-        lines.push(Line { p0: Point { x: 70.0, y: -70.0 }, p1: Point { x: -70.0, y: -70.0 }, color });
-        lines.push(Line { p0: Point { x: -70.0, y: -70.0 }, p1: Point { x: -70.0, y: 70.0 }, color });
+        lines.push(Line { p0: Point { x: sz, y: sz }, p1: Point { x: sz, y: -sz }, color });
+        lines.push(Line { p0: Point { x: sz, y: -sz }, p1: Point { x: -sz, y: -sz }, color });
+        lines.push(Line { p0: Point { x: -sz, y: -sz }, p1: Point { x: -sz, y: sz }, color });
         */
 
         lines
@@ -407,16 +453,20 @@ impl Scene {
                 color: 0x22ff3200,
             };
 
+            let mut did_intersect = false;
             for line in self.lines.iter() {
-                let (rv, r0, r1) = Line::is_intersection(&ray, line);
-                self.view.draw_line(&r0);
-                self.view.draw_line(&r1);
-                if (rv) {
-                    println!("intersection {:?} with {:?}", ray, line);
-                    ray.color += 0xf00;
+                let (rv, intersection) = Line::find_intersection(&ray, line);
+                // self.view.draw_line(&r1);
+                // if rv {
+                {
+                    // println!("intersection {:?} with {:?}", ray, line);
+                    did_intersect = true;
+                    self.view.draw_line(&intersection);
                 }
             }
-            self.view.draw_line(&ray.scale(len));
+            if !did_intersect {
+                // self.view.draw_line(&ray.scale(len));
+            }
         }
     }
 
