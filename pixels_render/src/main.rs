@@ -1,6 +1,6 @@
 use byteorder::{WriteBytesExt, BigEndian};
 use pixels::{Pixels, SurfaceTexture};
-use std::{thread, time};
+use std::{fmt, thread, time};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -17,6 +17,12 @@ struct Point {
     y: f32,
 }
 
+impl fmt::Debug for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{ {:0.3}, {:0.3} }}", self.x, self.y)
+    }
+}
+
 impl Point {
     fn default() -> Self {
         Self {
@@ -24,13 +30,75 @@ impl Point {
             y: 0.0,
         }
     }
+
+    fn plus(&self, p1: &Point) -> Point {
+        Point {
+            x: self.x + p1.x,
+            y: self.y + p1.y,
+        }
+    }
 }
 
 // TODO(lucasw) later lines are indices into a Point vector?
+#[derive(Debug)]
 struct Line {
     p0: Point,
     p1: Point,
+    // TODO(lucasw) store) color in a different struct that contains a Line
     color: u32,
+}
+
+impl Line {
+    fn new(p0: Point, p1: Point) -> Self {
+        Self {
+            p0,
+            p1,
+            color: 0xffffff00,
+        }
+    }
+
+    fn delta(&self) -> Point {
+        Point {
+            x: self.p1.x - self.p0.x,
+            y: self.p1.y - self.p0.y,
+        }
+    }
+
+    fn scale(&self, scale: f32) -> Line {
+        let delta = self.delta();
+        let new_end = Point {
+            x: scale * delta.x,
+            y: scale * delta.y,
+        };
+        let mut rv = Line::new(self.p0, self.p0.plus(&new_end));
+        rv.color = self.color;
+        rv
+    }
+
+    fn dot(&self, line: &Line) -> f32 {
+        let d0 = self.delta();
+        let d1 = line.delta();
+        d0.x * d1.x + d0.y * d1.y
+    }
+
+    fn project(&self, unit_ray: &Line) -> Line {
+        let dist_to_corner = self.dot(unit_ray);
+        unit_ray.scale(dist_to_corner)
+    }
+
+    fn is_intersection(unit_ray: &Line, line: &Line) -> (bool, Line, Line) {
+       let l0 = Line::new(unit_ray.p0, line.p0).project(unit_ray);
+       let right_angle_ray0 = Line::new(l0.p1, line.p0);
+       let l1 = Line::new(unit_ray.p0, line.p1).project(unit_ray);
+       let right_angle_ray1 = Line::new(l1.p1, line.p1);
+       // make sure one end of the line is in the same direction as the unit_ray,
+       // and that the unit ray is between the rays to either line end
+       (
+           (l0.dot(unit_ray) > 0.0 || l1.dot(unit_ray) > 0.0) && right_angle_ray0.dot(&right_angle_ray1) < 0.0,
+           right_angle_ray0,
+           right_angle_ray1,
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -265,9 +333,11 @@ impl Scene {
 
         let color = 0xaaaaaa00;
         lines.push(Line { p0: Point { x: -70.0, y: 70.0 }, p1: Point { x: 70.0, y: 70.0 }, color });
+        /*
         lines.push(Line { p0: Point { x: 70.0, y: 70.0 }, p1: Point { x: 70.0, y: -70.0 }, color });
         lines.push(Line { p0: Point { x: 70.0, y: -70.0 }, p1: Point { x: -70.0, y: -70.0 }, color });
         lines.push(Line { p0: Point { x: -70.0, y: -70.0 }, p1: Point { x: -70.0, y: 70.0 }, color });
+        */
 
         lines
     }
@@ -321,18 +391,32 @@ impl Scene {
 
         self.view.draw_line(&player_dir);
 
-        for i in -10..10 {
+        // for i in -10..10
+        let i = 0;
+        {
+            // TODO(lucasw) instead of regenerating these every loop, store in fixed
+            // perspective and then rotate them as needed into the scene.
             let angle = angle + i as f32 * 0.08;
             let len = 100.0;
-            let ray = Line {
+            let mut ray = Line {
                 p0: pos,
                 p1: Point {
-                    x: pos.x + len * angle.cos(),
-                    y: pos.y + len * angle.sin(),
+                    x: pos.x + 1.0 * angle.cos(),
+                    y: pos.y + 1.0 * angle.sin(),
                 },
                 color: 0x22ff3200,
             };
-            self.view.draw_line(&ray);
+
+            for line in self.lines.iter() {
+                let (rv, r0, r1) = Line::is_intersection(&ray, line);
+                self.view.draw_line(&r0);
+                self.view.draw_line(&r1);
+                if (rv) {
+                    println!("intersection {:?} with {:?}", ray, line);
+                    ray.color += 0xf00;
+                }
+            }
+            self.view.draw_line(&ray.scale(len));
         }
     }
 
