@@ -40,7 +40,7 @@ impl Point {
 }
 
 // TODO(lucasw) later lines are indices into a Point vector?
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Line {
     p0: Point,
     p1: Point,
@@ -116,32 +116,37 @@ impl Line {
     }
 
     // TODO(lucasw) return Option
-    fn find_intersection(unit_ray: &Line, line: &Line) -> (bool, Line) {
-       let (d0, l0, right_angle_ray0) = Line::new(unit_ray.p0, line.p0).project2(unit_ray);
-       let (d1, l1, right_angle_ray1) = Line::new(unit_ray.p0, line.p1).project2(unit_ray);
-       // make sure one end of the line is in the same direction as the unit_ray,
-       // and that the unit ray is between the rays to either line end
-       let maybe_intersection = (l0.dot(unit_ray) > 0.0 || l1.dot(unit_ray) > 0.0) &&
-                                 right_angle_ray0.dot(&right_angle_ray1) < 0.0;
+    fn find_intersection(unit_ray: &Line, line: &Line) -> (bool, f32, Line) {
+        let (d0, l0, right_angle_ray0) = Line::new(unit_ray.p0, line.p0).project2(unit_ray);
+        let (d1, l1, right_angle_ray1) = Line::new(unit_ray.p0, line.p1).project2(unit_ray);
+        // make sure one end of the line is in the same direction as the unit_ray,
+        // and that the unit ray is between the rays to either line end
+        let maybe_intersection = (l0.dot(unit_ray) > 0.0 || l1.dot(unit_ray) > 0.0) &&
+            right_angle_ray0.dot(&right_angle_ray1) < 0.0;
 
-       let r_dist0 = right_angle_ray0.len();
-       let r_dist1 = right_angle_ray1.len();
-       let intersection_dist;
-       if d1 > d0 {
-           intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
-       } else {
-           intersection_dist = d1 + (d0 - d1) * r_dist1 / (r_dist0 + r_dist1);
-       }
-       let is_intersection = maybe_intersection && intersection_dist > 0.0;
+        let r_dist0 = right_angle_ray0.len();
+        let r_dist1 = right_angle_ray1.len();
+        let intersection_dist;
+        intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
+        /*
+        if d1 > d0 {
+            intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
+        } else {
+            intersection_dist = d1 + (d0 - d1) * r_dist1 / (r_dist0 + r_dist1);
+        }
+        */
+        let is_intersection = maybe_intersection && intersection_dist > 0.0;
 
-       let intersection = unit_ray.scale(intersection_dist);
-       (
-           is_intersection,
-           intersection,
-           /*
-           right_angle_ray0,
-           right_angle_ray1,
-           */
+        let mut intersection = unit_ray.scale(intersection_dist);
+        intersection.color = 0x44ff8800;
+        (
+            is_intersection,
+            intersection_dist,
+            intersection,
+            /*
+               right_angle_ray0,
+               right_angle_ray1,
+               */
         )
     }
 }
@@ -379,11 +384,9 @@ impl Scene {
         let color = 0xaaaaaa00;
         let sz = 50.0;
         lines.push(Line { p0: Point { x: -sz, y: sz }, p1: Point { x: sz, y: sz }, color });
-        /*
         lines.push(Line { p0: Point { x: sz, y: sz }, p1: Point { x: sz, y: -sz }, color });
         lines.push(Line { p0: Point { x: sz, y: -sz }, p1: Point { x: -sz, y: -sz }, color });
         lines.push(Line { p0: Point { x: -sz, y: -sz }, p1: Point { x: -sz, y: sz }, color });
-        */
 
         lines
     }
@@ -437,35 +440,39 @@ impl Scene {
 
         self.view.draw_line(&player_dir);
 
-        // for i in -10..10
-        let i = 0;
+        // let i = 0;
+        for i in -10..10
         {
             // TODO(lucasw) instead of regenerating these every loop, store in fixed
             // perspective and then rotate them as needed into the scene.
             let angle = angle + i as f32 * 0.08;
             let len = 100.0;
-            let mut ray = Line {
+            let ray = Line {
                 p0: pos,
                 p1: Point {
                     x: pos.x + 1.0 * angle.cos(),
                     y: pos.y + 1.0 * angle.sin(),
                 },
-                color: 0x22ff3200,
+                color: 0x22883200,
             };
 
             let mut did_intersect = false;
+            let mut min_intersection = ray.clone();
+            let mut min_dist = 0.0;
             for line in self.lines.iter() {
-                let (rv, intersection) = Line::find_intersection(&ray, line);
+                let (rv, intersection_dist, intersection) = Line::find_intersection(&ray, line);
                 // self.view.draw_line(&r1);
-                // if rv {
-                {
-                    // println!("intersection {:?} with {:?}", ray, line);
+                if rv && (!did_intersect || intersection_dist < min_dist) {
                     did_intersect = true;
-                    self.view.draw_line(&intersection);
+                    min_dist = intersection_dist;
+                    min_intersection = intersection;
                 }
             }
-            if !did_intersect {
-                // self.view.draw_line(&ray.scale(len));
+            if did_intersect {
+                // println!("intersection {:?} with {:?}", ray, line);
+                self.view.draw_line(&min_intersection);
+            } else {
+                self.view.draw_line(&ray.scale(len));
             }
         }
     }
@@ -528,11 +535,11 @@ fn main() {
 
             if input.key_held(VirtualKeyCode::Left) || input.key_held(VirtualKeyCode::A) {
                 do_move = true;
-                dxya.position.x -= 0.5;
+                dxya.position.x -= 1.1;
             }
             if input.key_held(VirtualKeyCode::Right) || input.key_held(VirtualKeyCode::D) {
                 do_move = true;
-                dxya.position.x += 0.5;
+                dxya.position.x += 1.1;
             }
 
             if input.key_held(VirtualKeyCode::Up) || input.key_held(VirtualKeyCode::W) {
@@ -541,7 +548,7 @@ fn main() {
             }
             if input.key_held(VirtualKeyCode::Down) || input.key_held(VirtualKeyCode::S) {
                 do_move = true;
-                dxya.position.y += 1.0;
+                dxya.position.y += 1.1;
             }
 
             if input.key_held(VirtualKeyCode::Q) {
