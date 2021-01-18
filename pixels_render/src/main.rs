@@ -441,7 +441,7 @@ impl Scene {
         self.view.draw_line(&player_dir);
     }
 
-    fn draw_player_view(&self) -> Vec<Line> {
+    fn draw_player_view(&mut self) -> Vec<Line> {
         // let i = 0;
         //
         let pos = self.player.position;
@@ -480,6 +480,20 @@ impl Scene {
             if did_intersect {
                 // line.p0 = min_intersection.p0;
                 *line = min_intersection;
+
+                if min_dist > 0.0 {
+                    let height = (1000.0 / min_dist) as u32;
+                    let height_px = SCREEN_HEIGHT / 2 - height;
+                    // TODO(lucasw) not sure why this reversal is needed
+                    let x = (SCREEN_WIDTH - i as u32 - 1) as f32;
+                    // TODO(lucasw) need draw_point_screen that takes i32s
+                    let pt = Point { x, y: height_px as f32 };
+                    self.view.draw_point_screen(&pt, &0x80808000);
+                    let height_px = SCREEN_HEIGHT / 2 + height;
+                    let pt = Point { x, y: height_px as f32 };
+                    self.view.draw_point_screen(&pt, &0x80808000);
+                }
+
             } else {
                 *line = ray.scale(len);
             }
