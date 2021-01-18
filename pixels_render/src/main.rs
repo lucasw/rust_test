@@ -11,6 +11,11 @@ const SCREEN_HEIGHT: u32 = 200;
 
 // TODO(lucasw) consider nalgrebra in the future
 
+struct PointI {
+    x: i32,
+    y: i32,
+}
+
 #[derive(Clone, Copy)]
 struct Point {
     x: f32,
@@ -59,6 +64,15 @@ impl Line {
 
     fn reverse(&self) -> Line {
         Line::new(self.p1, self.p0)
+    }
+
+    fn plus(&self, rhs: &Line) -> Line {
+        let rhs_delta = rhs.delta();
+        Line {
+            p0: self.p0,
+            p1: self.p1.plus(&rhs_delta),
+            color: self.color,
+        }
     }
 
     fn delta(&self) -> Point {
@@ -126,15 +140,7 @@ impl Line {
 
         let r_dist0 = right_angle_ray0.len();
         let r_dist1 = right_angle_ray1.len();
-        let intersection_dist;
-        intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
-        /*
-        if d1 > d0 {
-            intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
-        } else {
-            intersection_dist = d1 + (d0 - d1) * r_dist1 / (r_dist0 + r_dist1);
-        }
-        */
+        let intersection_dist = d0 + (d1 - d0) * r_dist0 / (r_dist0 + r_dist1);
         let is_intersection = maybe_intersection && intersection_dist > 0.0;
 
         let mut intersection = unit_ray.scale(intersection_dist);
@@ -221,6 +227,33 @@ impl PosAngle {
             angle: 0.0,
         }
     }
+
+    fn get_forward(&self) -> Line {
+        let pos = self.position;
+        let angle = self.angle;
+        Line {
+            p0: pos,
+            p1: Point {
+                x: pos.x + angle.cos(),
+                y: pos.y + angle.sin(),
+            },
+            color: 0x0022ff32,
+        }
+    }
+
+    fn get_right(&self) -> Line {
+        let pos = self.position;
+        let angle = self.angle;
+        Line {
+            p0: pos,
+            p1: Point {
+                x: pos.x + angle.sin(),
+                y: pos.y + -angle.cos(),
+            },
+            color: 0x0022ff32,
+        }
+    }
+
 }
 
 struct View {
@@ -256,6 +289,18 @@ impl View {
         self.position.x += offset.x;
         self.position.y += offset.y;
         self.angle += dxya.angle;
+    }
+
+    fn draw_pointi_screen(&mut self, point: &PointI, color: &u32) {
+        if point.x < 0 { return; }
+        if point.y < 0 { return; }
+
+        let x = point.x as usize;
+        let y = point.y as usize;
+        if x >= self.width { return; }
+        if y >= self.height { return; }
+        let ind = (y * self.width + x) as usize;
+        self.buffer[ind] = *color;
     }
 
     // use screen coordinates here
@@ -335,15 +380,21 @@ impl View {
     }
 
     fn draw_background(&mut self) {
+        let half_ht = (self.height / 2) as u32;
         for (count, pixel) in self.buffer.iter_mut().enumerate() {
             // let x = count as u32 % self.width;
             let y = (count / self.width) as u32;
-            let r = y % 0xff;
-            let g = (y / 2) % 0xff;
-            let b = (y / 4) % 0xff;
-            // let color = [0, r, g, b];
-            *pixel = r << 24 | g << 16 | b << 8;
-            // *pixel = 0x00ffffff;
+
+            if y > half_ht {
+                let y = (y - half_ht) * 2;
+                let r = y % 0xff;
+                let g = (y / 2) % 0xff;
+                let b = (y / 4) % 0xff;
+                // let color = [0, r, g, b];
+                *pixel = r << 24 | g << 16 | b << 8;
+            } else {
+                *pixel = 0x00000000;
+            }
         }
     }
 
@@ -424,26 +475,10 @@ impl Scene {
         self.view.update();
     }
 
-    fn draw_player(&mut self) {
-        // draw the player as a line pointing in their view direction
-        let pos = self.player.position;
-        let angle = self.player.angle;
-        let len = 10.0;
-        let player_dir = Line {
-            p0: pos,
-            p1: Point {
-                x: pos.x + len * angle.cos(),
-                y: pos.y + len * angle.sin(),
-            },
-            color: 0x0022ff32,
-        };
-
-        self.view.draw_line(&player_dir);
-    }
-
     fn draw_player_view(&mut self) -> Vec<Line> {
         // let i = 0;
-        //
+        let player_forward = self.player.get_forward();
+        let player_right = self.player.get_right();
         let pos = self.player.position;
         let angle = self.player.angle;
         // let mut lines = Vec::<Line>::with_capacity(SCREEN_WIDTH as usize);
@@ -455,43 +490,62 @@ impl Scene {
             // perspective and then rotate them as needed into the scene,
             // only update if the player fov or resolution changes.
             let x = i as i32 - SCREEN_WIDTH as i32 / 2;
-            let angle = angle + x as f32 * 0.008;
+
             let len = 100.0;
-            let ray = Line {
-                p0: pos,
-                p1: Point {
-                    x: pos.x + 1.0 * angle.cos(),
-                    y: pos.y + 1.0 * angle.sin(),
-                },
-                color: 0x22883200,
-            };
+            let color = 0x22883200;
+            let ray;
+            if (false) {
+                let angle = angle + x as f32 * 0.008;
+                ray = Line {
+                    p0: pos,
+                    p1: Point {
+                        x: pos.x + 1.0 * angle.cos(),
+                        y: pos.y + 1.0 * angle.sin(),
+                    },
+                    color,
+                };
+            } else {
+                let shift = x as f32 * 0.008;
+                ray = player_forward.plus(&player_right.scale(shift)).unit();
+            }
 
             let mut did_intersect = false;
             let mut min_intersection = ray.clone();
             let mut min_dist = 0.0;
             for line in self.lines.iter() {
-                let (rv, intersection_dist, intersection) = Line::find_intersection(&ray, line);
-                if rv && (!did_intersect || intersection_dist < min_dist) {
+                let (rv, dist, intersection) = Line::find_intersection(&ray, line);
+
+                // using this can't have a fisheye camera
+                let dist = intersection.dot(&player_forward);
+
+                if rv && (!did_intersect || dist < min_dist) {
                     did_intersect = true;
-                    min_dist = intersection_dist;
+                    min_dist = dist;
+                    // min_dist = intersection_dist;
                     min_intersection = intersection;
                 }
             }
             if did_intersect {
                 // line.p0 = min_intersection.p0;
-                *line = min_intersection;
+                //
+                let right = min_intersection.project(&player_right);
+                line.p0 = right.p1;
+                line.p1 = min_intersection.p1;
+                line.color = min_intersection.color;
+
+                // *line = min_intersection;
 
                 if min_dist > 0.0 {
+                    let col = 0xff - ((min_dist * 2.0) as u8) as u32;
+                    let color = col << 24 | col << 16 | col << 8;
                     let height = (1000.0 / min_dist) as u32;
-                    let height_px = SCREEN_HEIGHT / 2 - height;
-                    // TODO(lucasw) not sure why this reversal is needed
-                    let x = (SCREEN_WIDTH - i as u32 - 1) as f32;
-                    // TODO(lucasw) need draw_point_screen that takes i32s
-                    let pt = Point { x, y: height_px as f32 };
-                    self.view.draw_point_screen(&pt, &0x80808000);
-                    let height_px = SCREEN_HEIGHT / 2 + height;
-                    let pt = Point { x, y: height_px as f32 };
-                    self.view.draw_point_screen(&pt, &0x80808000);
+                    // let height = (min_dist) as u32;
+                    let height_px1 = SCREEN_HEIGHT / 2 - height;
+                    let height_px2 = SCREEN_HEIGHT / 2 + height;
+                    for y in height_px1..height_px2 {
+                        let pt = PointI { x: i as i32, y: y as i32 };
+                        self.view.draw_pointi_screen(&pt, &color);
+                    }
                 }
 
             } else {
@@ -510,13 +564,15 @@ impl Scene {
             // println!("intersection {:?}", line);
             self.view.draw_line(&line);
         }
-        self.draw_player();
+        // draw the player as a line pointing in their view direction
+        self.view.draw_line(&self.player.get_forward().scale(10.0));
+        self.view.draw_line(&self.player.get_right().scale(10.0));
     }
 
     fn draw(&mut self) {
         self.view.draw_background();
         let view_lines = self.draw_player_view();
-        self.draw_overhead(&view_lines);
+        // self.draw_overhead(&view_lines);
     }
 }
 
