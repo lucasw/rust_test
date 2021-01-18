@@ -439,13 +439,23 @@ impl Scene {
         };
 
         self.view.draw_line(&player_dir);
+    }
 
+    fn draw_player_view(&self) -> Vec<Line> {
         // let i = 0;
-        for i in -10..10
+        //
+        let pos = self.player.position;
+        let angle = self.player.angle;
+        // let mut lines = Vec::<Line>::with_capacity(SCREEN_WIDTH as usize);
+        let mut lines = vec![Line::new(Point::default(), Point::default()); SCREEN_WIDTH as usize];
+
+        for (i, line) in lines.iter_mut().enumerate()
         {
             // TODO(lucasw) instead of regenerating these every loop, store in fixed
-            // perspective and then rotate them as needed into the scene.
-            let angle = angle + i as f32 * 0.08;
+            // perspective and then rotate them as needed into the scene,
+            // only update if the player fov or resolution changes.
+            let x = i as i32 - SCREEN_WIDTH as i32 / 2;
+            let angle = angle + x as f32 * 0.008;
             let len = 100.0;
             let ray = Line {
                 p0: pos,
@@ -461,7 +471,6 @@ impl Scene {
             let mut min_dist = 0.0;
             for line in self.lines.iter() {
                 let (rv, intersection_dist, intersection) = Line::find_intersection(&ray, line);
-                // self.view.draw_line(&r1);
                 if rv && (!did_intersect || intersection_dist < min_dist) {
                     did_intersect = true;
                     min_dist = intersection_dist;
@@ -469,20 +478,31 @@ impl Scene {
                 }
             }
             if did_intersect {
-                // println!("intersection {:?} with {:?}", ray, line);
-                self.view.draw_line(&min_intersection);
+                // line.p0 = min_intersection.p0;
+                *line = min_intersection;
             } else {
-                self.view.draw_line(&ray.scale(len));
+                *line = ray.scale(len);
             }
         }
+
+        lines
+    }
+
+    fn draw_overhead(&mut self, player_view_lines: &Vec<Line>) {
+        for line in self.lines.iter() {
+            self.view.draw_line(&line);
+        }
+        for line in player_view_lines.iter().step_by(16) {
+            // println!("intersection {:?}", line);
+            self.view.draw_line(&line);
+        }
+        self.draw_player();
     }
 
     fn draw(&mut self) {
         self.view.draw_background();
-        for line in self.lines.iter_mut() {
-            self.view.draw_line(&line);
-        }
-        self.draw_player();
+        let view_lines = self.draw_player_view();
+        self.draw_overhead(&view_lines);
     }
 }
 
