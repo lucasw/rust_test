@@ -93,28 +93,36 @@ fn from_rgb(r: u8, g: u8, b: u8) -> u32 {
     (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8
 }
 
-pub fn make_plot(mut image: &mut Image, filename: &str, x_scale: f64, y_scale: f64) {
-    let width = image.width;
-    let height = image.height;
-    let sc = 0.95;
-    for i in 0..(width * height) {
-        let r = image.buffer[i].r();
-        let g = image.buffer[i].g();
-        let b = image.buffer[i].b();
-        image.buffer[i] = from_rgb(
-            (r as f64 * sc) as u8,
-            (g as f64 * sc) as u8,
-            (b as f64 * sc) as u8,
-        );
-    }
-
+pub fn get_data(filename: &str) -> Vec<Vec<f64>> {
     let path = Path::new(filename);
     let csv_file = match File::open(&path) {
         Err(why) => panic!("couldn't open {}: {}", path.display(), why),
         Ok(csv_file) => csv_file,
     };
 
-    let columns = load_csv(csv_file).unwrap();
+    // TODO(lucasw) don't unwrap here, caller can do that if they want.
+    load_csv(csv_file).unwrap()
+}
+
+pub fn make_plot(columns: &Vec<Vec<f64>>,
+                 mut image: &mut Image,
+                 x_scale: f64, y_scale: f64,
+                 x_offset: f64, y_offset: f64) {
+    let width = image.width;
+    let height = image.height;
+    for i in 0..(width * height) {
+        let r = image.buffer[i].r();
+        let g = image.buffer[i].g();
+        let b = image.buffer[i].b();
+        image.buffer[i] = from_rgb(
+            r >> 1,
+            g >> 1,
+            b >> 1,
+        );
+        // image.buffer[i] = 0;
+    }
+
+    let base_line_color = from_rgb(128, 128, 128);
 
     for (col_ind, column) in columns.iter().enumerate() {
         // println!("{} {:?}", col_ind, column);
@@ -124,8 +132,8 @@ pub fn make_plot(mut image: &mut Image, filename: &str, x_scale: f64, y_scale: f
             (50 + col_ind * 10) as u8,
         );
         let tiles = 2;
-        let x_offset = ((col_ind % tiles) * width / tiles + 10) as f64;
-        let y_offset = (col_ind / tiles) as f64 * 180.0 + 120.0;
+        let x_offset = x_offset + ((col_ind % tiles) * width / tiles + 10) as f64;
+        let y_offset = y_offset + (col_ind / tiles) as f64 * 180.0 + 120.0;
 
         for (i, val) in column.iter().enumerate() {
             let x = i as f64 * x_scale + 50.0 + x_offset;
@@ -135,7 +143,7 @@ pub fn make_plot(mut image: &mut Image, filename: &str, x_scale: f64, y_scale: f
                 &mut image,
                 x,
                 height as f64 - y_offset,
-                from_rgb(128, 128, 128),
+                base_line_color,
             );
         }
     }
