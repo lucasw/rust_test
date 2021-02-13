@@ -89,7 +89,7 @@ impl RGBExt for u32 {
     }
 }
 
-fn from_rgb(r: u8, g: u8, b: u8) -> u32 {
+pub fn from_rgb(r: u8, g: u8, b: u8) -> u32 {
     (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8
 }
 
@@ -117,7 +117,7 @@ pub fn make_plot(columns: &Vec<Vec<f64>>,
         image.buffer[i] = from_rgb(
             r >> 1,
             g >> 1,
-            b >> 1,
+            b, // >> 1,
         );
         // image.buffer[i] = 0;
     }

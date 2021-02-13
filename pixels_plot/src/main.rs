@@ -3,7 +3,7 @@ mod utility;
 use byteorder::{BigEndian, WriteBytesExt};
 use pixels::{Pixels, SurfaceTexture};
 use std::{thread, time};
-use utility::{create_window, get_data, get_filename, make_plot, Image};
+use utility::{create_window, from_rgb, get_data, get_filename, make_plot, Image};
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit_input_helper::WinitInputHelper;
@@ -27,7 +27,7 @@ fn main() {
 
     let mut pixels = Pixels::new(width as u32, height as u32, surface_texture).unwrap();
     let mut image = Image {
-        buffer: vec![0; width * height],
+        buffer: vec![from_rgb(0, 0, 64); width * height],
         width,
         height,
     };
@@ -37,6 +37,7 @@ fn main() {
     let mut y_scale = 50.0;
     let mut x_offset = 0.0;
     let mut y_offset = 0.0;
+    println!("image size {} x {}, screen size {} {}", image.width, image.height, p_width, p_height);
     make_plot(&data, &mut image, x_scale, y_scale, x_offset, y_offset);
     let screen = pixels.get_frame();
     draw(&image, screen);
@@ -59,7 +60,8 @@ fn main() {
                 // about 1-2 ms
                 draw(&image, screen);
                 let dur2 = start.elapsed();
-                println!("draw calls {:?} {:?}", dur1, dur2);
+                println!("image size {} x {}, draw calls {:?} {:?}",
+                         image.width, image.height, dur1, dur2);
                 replot = false;
             }
 
@@ -90,7 +92,7 @@ fn main() {
             // Resize the window- if this doesn't happen a resize will crash the program
             if let Some(size) = input.window_resized() {
                 pixels.resize(size.width, size.height);
-                // println!("new width {} height {}", size.width, size.height);
+                println!("new width {} height {}", size.width, size.height);
             }
 
             // app specific- move to function
