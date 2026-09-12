@@ -2,8 +2,8 @@ use eframe::egui;
 // use egui_plot::{Plot, PlotImage};
 
 struct Particle {
-    x: i32,
-    y: i32,
+    x: f32,
+    y: f32,
 }
 
 /*
@@ -39,7 +39,7 @@ impl eframe::App for App {
                 size[0] * size[1],
                 self.color_image.pixels.len()
             ));
-            ui.label(format!("max0 {:.6}, max1 {:.6}", self.max0, self.max1));
+            ui.label(format!("max0 {:.3}, max1 {:.3}", self.max0, self.max1));
             // TODO(lucasw) use egui_plot to scale the image to the window
             let texture_handle = ui.ctx().load_texture(
                 "image",
@@ -56,8 +56,20 @@ impl eframe::App for App {
     }
 }
 
-fn get_value(values: &[f32], width: usize, height: usize, pos: [i32; 2]) -> Option<f32> {
+fn get_value_i32(values: &[f32], width: usize, height: usize, pos: [i32; 2]) -> Option<f32> {
     let [x, y] = pos;
+    if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
+        let ind = y as usize * width + x as usize;
+        Some(values[ind])
+    } else {
+        None
+    }
+}
+
+fn get_value(values: &[f32], width: usize, height: usize, pos: [f32; 2]) -> Option<f32> {
+    let [x, y] = pos;
+    let x = x.round() as i32;
+    let y = y.round() as i32;
     if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
         let ind = y as usize * width + x as usize;
         Some(values[ind])
@@ -73,46 +85,61 @@ fn move_particles(
     field0: &mut [f32],
     field1: &mut [f32],
 ) {
+    let speed: f32 = 0.85;
+    let dist: f32 = 2.5;
+    let num = 16;
+    let samples: Vec<([f32; 2], f32)> = (0..num)
+        .map(|ind| {
+            let angle = (ind as f32 / num as f32) * std::f32::consts::PI * 2.0;
+            ([dist * angle.cos(), dist * angle.sin()], speed)
+        })
+        .collect();
+
     particles.iter_mut().for_each(|particle| {
         let px = particle.x;
         let py = particle.y;
 
-        {
+        if rand::random::<f32>() < 0.0004 {
+            // this particle dies and is respawned
+            let ind = particle.y.round() as usize * width + particle.x.round() as usize;
+            if ind < field1.len() {
+                field1[ind] += 5.0;
+                field0[ind] -= 0.5;
+            }
+            particle.x = rand::random::<f32>() * (width - 1) as f32;
+            particle.y = rand::random::<f32>() * (height - 1) as f32;
+        } else {
             // move the particle to more attractive neighbor position
             let pos = [px, py];
-            let moves = vec![
-                [px - 1, py - 1],
-                [px - 1, py + 1],
-                [px + 1, py + 1],
-                [px + 1, py - 1],
-                [px, py - 1],
-                [px, py + 1],
-                [px - 1, py],
-                [px + 1, py],
-            ];
-
             let mut best_move = pos;
             if let Some(mut best_move_value) = get_value(field0, width, height, pos) {
-                for test_pos in moves {
+                for ([ox, oy], scale) in &samples {
+                    let tpx = px + ox;
+                    let tpy = py + oy;
+                    let test_pos: [f32; 2] = [tpx, tpy];
                     if let Some(test_value) = get_value(field0, width, height, test_pos)
                         && test_value > best_move_value
                     {
-                        best_move = test_pos;
+                        best_move = [px + scale * ox, py + scale * oy];
                         best_move_value = test_value;
                     }
                 }
 
                 particle.x = best_move[0];
                 particle.y = best_move[1];
-                particle.x %= width as i32;
-                particle.y %= height as i32;
             }
         }
 
-        let ind = particle.y as usize * width + particle.x as usize;
-        field1[ind] += 0.2;
-        // repel other particles (though this also self repels)
-        field0[ind] -= 0.05;
+        particle.x %= (width - 1) as f32;
+        particle.y %= (height - 1) as f32;
+
+        let ind = particle.y.round() as usize * width + particle.x.round() as usize;
+        // if ind < field1.len() {
+            // attract the opposite particles
+            field1[ind] += 0.1;
+            // repel other particles (though this also self repels)
+            field0[ind] -= 0.05;
+        // }
     });
 }
 
@@ -128,7 +155,7 @@ impl App {
             }
         }
 
-        let retain = 0.995;
+        let retain = 0.998;
         {
             // let mut min0: f32 = f32::MAX;
             let mut max0 = f32::MIN;
@@ -169,21 +196,27 @@ impl App {
                 let px = ind as i32 % width as i32;
                 let py = ind as i32 / width as i32;
                 // let pos = [px, py];
-                let pos_u = [px, py - 1];
-                let pos_d = [px, py + 1];
-                let pos_l = [px - 1, py];
-                let pos_r = [px + 1, py];
+                let positions = vec![
+                    [px - 1, py - 1],
+                    [px - 1, py + 1],
+                    [px + 1, py + 1],
+                    [px + 1, py - 1],
+                    [px, py - 1],
+                    [px, py + 1],
+                    [px - 1, py],
+                    [px + 1, py],
+                ];
 
                 let mut count = 0;
                 let mut aggregate_value = 0.0;
-                for test_pos in [pos_u, pos_d, pos_l, pos_r] {
-                    if let Some(test_value) = get_value(ga, width, height, test_pos) {
+                for test_pos in positions {
+                    if let Some(test_value) = get_value_i32(ga, width, height, test_pos) {
                         count += 1;
                         aggregate_value += test_value;
                     }
                 }
 
-                let fr = 0.25;
+                let fr = 0.1;
                 gb[ind] = ga[ind] * (1.0 - fr);
                 gb[ind] += (aggregate_value / count as f32) * fr; // * 0.999;
             }
@@ -215,36 +248,44 @@ impl App {
                 let ind = yi * width + xi;
                 let mut r = 0;
                 let mut g = 0;
-                let b = 0;
+                let mut b = 0;
 
                 if self.max0 > 0.0 {
                     let v = self.move_gradient0a[ind];
                     let v = 2.0 * (sigmoid(30.0 * v) - 0.5);
-                    r += (255.0 * v).clamp(0.0, 255.0) as u8;
+                    r += (175.0 * v).clamp(0.0, 255.0) as u16;
+                    g += (58.0 * v).clamp(0.0, 255.0) as u16;
+                    b += (188.0 * v).clamp(0.0, 255.0) as u16;
                 }
 
                 if self.max1 > 0.0 {
                     let v = self.move_gradient1a[ind];
                     let v = 2.0 * (sigmoid(30.0 * v) - 0.5);
-                    g += (255.0 * v).clamp(0.0, 255.0) as u8;
+                    r += (15.0 * v).clamp(0.0, 255.0) as u16;
+                    g += (195.0 * v).clamp(0.0, 255.0) as u16;
+                    b += (58.0 * v).clamp(0.0, 255.0) as u16;
                 }
 
-                let color = egui::Color32::from_rgb(r, g, b);
+                let color = egui::Color32::from_rgb(r as u8, g as u8, b as u8);
                 self.color_image.pixels[ind] = color;
             }
         }
 
         // draw the particles
         self.particles1.iter_mut().for_each(|particle| {
-            let ind = particle.y * width as i32 + particle.x;
-            let color = egui::Color32::from_rgb(255, 100, 35);
-            self.color_image.pixels[ind as usize] = color;
+            let ind = (particle.y.round() * width as f32 + particle.x.round()) as usize;
+            let color = egui::Color32::from_rgb(255, 130, 225);
+            if ind < (width * height) {
+                self.color_image.pixels[ind as usize] = color;
+            }
         });
 
         self.particles0.iter_mut().for_each(|particle| {
-            let ind = particle.y * width as i32 + particle.x;
-            let color = egui::Color32::from_rgb(100, 255, 30);
-            self.color_image.pixels[ind as usize] = color;
+            let ind = (particle.y.round() * width as f32 + particle.x.round()) as usize;
+            let color = egui::Color32::from_rgb(190, 255, 130);
+            if ind < (width * height) {
+                self.color_image.pixels[ind as usize] = color;
+            }
         });
 
         self.counter += 1;
@@ -252,8 +293,9 @@ impl App {
 }
 
 fn main() {
-    let width = 640;
-    let height = 480;
+    // let width = 640;
+    // let height = 480;
+    let (width, height) = (1280, 720);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -261,17 +303,18 @@ fn main() {
         ..Default::default()
     };
 
-    let fill_color = egui::Color32::DARK_BLUE;
+    let fill_color = egui::Color32::BLACK;
 
     let mut move_gradient0 = vec![0.0; width * height];
     let mut move_gradient1 = move_gradient0.clone();
     for yi in 0..height {
         for xi in 0..width {
             let ind = yi * width + xi;
-            let fr = 0.00000003;
-            let sc = 0.1;
-            move_gradient0[ind] = 0.01 + rand::random::<f32>() * sc + yi as f32 * fr;
-            move_gradient1[ind] = 0.01 + rand::random::<f32>() * sc + (height - yi) as f32 * fr;
+            let fr = 0.000004;
+            let sc = 0.001;
+            let base = 0.0001;
+            move_gradient0[ind] = base + rand::random::<f32>() * sc + yi as f32 * fr;
+            move_gradient1[ind] = base + rand::random::<f32>() * sc + (height - yi) as f32 * fr;
         }
     }
 
@@ -288,19 +331,18 @@ fn main() {
         counter: 0,
     };
 
-    for i in 0..150 {
-        let x = 5 + i * 10;
-        app.particles0.push(Particle {
-            x: (x % width) as i32,
-            y: (30 + (x / width) * 10) as i32 + (rand::random::<f32>() * 20.0) as i32,
-        });
+    for _i in 0..250 {
+        let x = rand::random::<f32>() * (width - 1) as f32;
+        let y = 0.25 * (rand::random::<f32>() * (height - 1) as f32);
+        app.particles0.push(Particle { x, y });
     }
 
-    for i in 0..150 {
-        let x = 5 + i * 10;
+    for _i in 0..250 {
+        let x = rand::random::<f32>() * (width - 1) as f32;
+        let y = 0.25 * (rand::random::<f32>() * (height - 1) as f32);
         app.particles1.push(Particle {
-            x: (x % width) as i32,
-            y: (height - 20 - (x / width) * 10) as i32 - (rand::random::<f32>() * 20.0) as i32,
+            x,
+            y: height as f32 - y,
         });
     }
 
