@@ -159,15 +159,20 @@ fn move_particles(
     field0: &mut [f32],
     field1: &mut [f32],
 ) {
-    let speed: f32 = 0.85;
-    let dist: f32 = 2.5;
+    let speed: f32 = 0.55;
     let num = 16;
-    let samples: Vec<([f32; 2], f32)> = (0..num)
+    let mut samples = Vec::new();
+    for dist in [1.2, 2.5, 4.0] {
+        let new_samples: Vec<_> = (0..num)
         .map(|ind| {
             let angle = (ind as f32 / num as f32) * std::f32::consts::PI * 2.0;
-            ([dist * angle.cos(), dist * angle.sin()], speed)
+            let cosa = angle.cos();
+            let sina = angle.sin();
+            ([cosa, sina], [dist * cosa, dist * sina], speed)
         })
         .collect();
+        samples.extend(new_samples);
+    }
 
     particles.iter_mut().for_each(|particle| {
         let px = particle.x;
@@ -187,14 +192,14 @@ fn move_particles(
             let pos = [px, py];
             let mut best_move = pos;
             if let Some(mut best_move_value) = get_value(field0, width, height, pos) {
-                for ([ox, oy], scale) in &samples {
-                    let tpx = px + ox;
-                    let tpy = py + oy;
+                for ([cosa, sina], [sx, sy], scale) in &samples {
+                    let tpx = px + sx;
+                    let tpy = py + sy;
                     let test_pos: [f32; 2] = [tpx, tpy];
                     if let Some(test_value) = get_value(field0, width, height, test_pos)
                         && test_value > best_move_value
                     {
-                        best_move = [px + scale * ox, py + scale * oy];
+                        best_move = [px + scale * cosa, py + scale * sina];
                         best_move_value = test_value;
                     }
                 }
@@ -264,27 +269,7 @@ impl App {
             }
         }
 
-        let retain = 0.998;
-        {
-            // let mut min0: f32 = f32::MAX;
-            let mut max0 = f32::MIN;
-            self.move_gradient0a.iter_mut().for_each(|v| {
-                *v *= retain;
-                max0 = max0.max(*v);
-                // min0 = min0.min(*v);
-            });
-            self.max0 = max0;
-        }
-
-        {
-            let mut max1 = f32::MIN;
-            self.move_gradient1a.iter_mut().for_each(|v| {
-                *v *= retain;
-                max1 = max1.max(*v);
-            });
-            self.max1 = max1;
-        }
-
+        // These take almost no time
         move_particles(
             width,
             height,
@@ -301,6 +286,7 @@ impl App {
         );
 
         fn smooth_gradient(width: usize, height: usize, ga: &[f32], gb: &mut [f32]) {
+            let retain = 0.99;
             for ind in 0..ga.len() {
                 let px = ind as i32 % width as i32;
                 let py = ind as i32 / width as i32;
@@ -326,26 +312,30 @@ impl App {
                 }
 
                 let fr = 0.1;
-                gb[ind] = ga[ind] * (1.0 - fr);
-                gb[ind] += (aggregate_value / count as f32) * fr; // * 0.999;
+                gb[ind] = ga[ind] * (1.0 - fr) * retain;
+                gb[ind] += (aggregate_value / count as f32) * fr;
             }
         }
 
-        smooth_gradient(
-            width,
-            height,
-            &self.move_gradient0a,
-            &mut self.move_gradient0b,
-        );
-        std::mem::swap(&mut self.move_gradient0a, &mut self.move_gradient0b);
-
-        smooth_gradient(
-            width,
-            height,
-            &self.move_gradient1a,
-            &mut self.move_gradient1b,
-        );
-        std::mem::swap(&mut self.move_gradient1a, &mut self.move_gradient1b);
+        if self.counter % 8 == 0 {
+            // these take 5 ms each at 640x480
+            smooth_gradient(
+                width,
+                height,
+                &self.move_gradient0a,
+                &mut self.move_gradient0b,
+            );
+            // these swaps take no time
+            std::mem::swap(&mut self.move_gradient0a, &mut self.move_gradient0b);
+        } else if self.counter % 8 == 4 {
+            smooth_gradient(
+                width,
+                height,
+                &self.move_gradient1a,
+                &mut self.move_gradient1b,
+            );
+            std::mem::swap(&mut self.move_gradient1a, &mut self.move_gradient1b);
+        }
 
         fn sigmoid(x: f32) -> f32 {
             1.0 / (1.0 + (-x).exp())
@@ -359,7 +349,8 @@ impl App {
                 let mut g = 0;
                 let mut b = 0;
 
-                if self.max0 > 0.0 {
+                // if self.max0 > 0.0
+                {
                     let v = self.move_gradient0a[ind];
                     let v = 2.0 * (sigmoid(30.0 * v) - 0.5);
                     r += (175.0 * v).clamp(0.0, 255.0) as u16;
@@ -367,7 +358,8 @@ impl App {
                     b += (188.0 * v).clamp(0.0, 255.0) as u16;
                 }
 
-                if self.max1 > 0.0 {
+                // if self.max1 > 0.0
+                {
                     let v = self.move_gradient1a[ind];
                     let v = 2.0 * (sigmoid(30.0 * v) - 0.5);
                     r += (15.0 * v).clamp(0.0, 255.0) as u16;
