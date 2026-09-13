@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 eframe = "0.36.2"
+egui_plot = "0.37.0"
 rand = "0.10.2"
