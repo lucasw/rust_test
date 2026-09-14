@@ -47,7 +47,7 @@ fn position_to_ind(x: f32, y: f32, width: usize, height: usize) -> Option<usize>
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Angle {
     /// radians
     angle: f32,
@@ -55,27 +55,29 @@ struct Angle {
     /// in the direction of angle but define a vector with a length >= 1.0
     dx: f32,
     dy: f32,
+    scale: f32,
 }
 
 impl Angle {
     fn new(angle: f32) -> Self {
         let mut dx = angle.cos();
         let mut dy = angle.sin();
-        if dx.abs() > dy.abs() {
-            let dy2 = dy / dx.abs();
-            dx /= dx.abs();
-            dy = dy2;
-        } else {
-            let dx2 = dx / dy.abs();
-            dy /= dy.abs();
-            dx = dx2;
-        }
+        let scale = {
+            if dx.abs() > dy.abs() {
+                1.0 / dx.abs()
+            } else {
+                1.0 / dy.abs()
+            }
+        };
+        dx *= scale;
+        dy *= scale;
 
         Self {
             // TODO(lucasw) normalize angle to be -π to π
             angle: angle % (2.0 * std::f32::consts::PI),
             dx,
             dy,
+            scale,
         }
     }
 }
@@ -95,12 +97,32 @@ struct Turret {
     last_shot: usize,
 }
 
+/// Turrets fire shells
+struct Shell {
+    x: f32,
+    y: f32,
+    angle: Angle,
+    speed: f32,
+}
+
+impl Shell {
+    // TODO(lucasw) this is a sprite
+    const DAMAGE_PATTERN: [[u16; 5]; 5] = [
+        [0, 120, 140, 120, 0],
+        [120, 150, 800, 150, 120],
+        [140, 800, 1500, 800, 140],
+        [120, 150, 800, 150, 120],
+        [0, 120, 140, 120, 0],
+    ];
+}
+
 #[derive(Default)]
 struct Game {
     static_obstacles: Vec<u16>,
 
     turrets0: Vec<Turret>,
 
+    shells: Vec<Shell>,
     /*
     particles0: Vec<Particle>,
     /// particles will move to higher scoring neighbor cells here
@@ -125,24 +147,20 @@ impl Game {
             .iter()
             .enumerate()
             .for_each(|(ind, obstacle)| {
+                // if *obstacle > 0 {
                 let color = egui::Color32::from_rgb(
                     (obstacle >> 5).clamp(0, 255) as u8,
                     (obstacle >> 9) as u8,
                     (obstacle >> 10) as u8,
                 );
                 color_image.pixels[ind] = color;
+                // } else {
+                //     color_image.pixels[ind] = color_image.pixels[ind].gamma_multiply_u8(200);
+                // }
             });
 
         // how much damage is being done within a grid location
         let mut damage: Vec<u16> = vec![0; width * height];
-
-        let shell_pattern = [
-            [0, 10, 20, 10, 0],
-            [10, 50, 100, 50, 10],
-            [20, 100, 500, 100, 20],
-            [10, 50, 100, 50, 10],
-            [0, 10, 20, 10, 0],
-        ];
 
         self.turrets0
             .iter_mut()
@@ -151,49 +169,18 @@ impl Game {
                 let elapsed = self.counter - turret.last_shot;
                 if elapsed > turret.reload {
                     // println!("[{}] {ind} shoot", self.counter);
-                    let mut shell_x = turret.x;
-                    let mut shell_y = turret.y;
-                    let color = egui::Color32::from_rgb(255, 255, 0);
-                    for _ in 0..500 {
-                        shell_x += turret.angle.dx;
-                        shell_y += turret.angle.dy;
-                        if let Some(pixel_ind) = position_to_ind(shell_x, shell_y, width, height) {
-                            color_image.pixels[pixel_ind] = color;
-                            if self.static_obstacles[pixel_ind] > 0 {
-                                for iy in 0..5 {
-                                    let oy = iy as f32 - 2.0;
-                                    for ix in 0..5 {
-                                        let ox = ix as f32 - 2.0;
-                                        if let Some(damage_ind) = position_to_ind(
-                                            shell_x + ox,
-                                            shell_y + oy,
-                                            width,
-                                            height,
-                                        ) {
-                                            damage[damage_ind] += shell_pattern[iy][ix];
-                                        }
-                                    }
-                                }
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
+                    let speed = 20.0 + rand::random::<f32>() * 2.0;
+                    let offset = speed * rand::random::<f32>() * 0.4;
+                    let shell = Shell {
+                        x: turret.x + turret.angle.dx * offset,
+                        y: turret.y + turret.angle.dy * offset,
+                        angle: turret.angle.clone(),
+                        speed,
+                    };
+                    self.shells.push(shell);
                     turret.angle =
                         Angle::new(turret.angle.angle + (rand::random::<f32>() - 0.5) * 0.02);
                     turret.last_shot = self.counter;
-                }
-
-                for pixel_ind in 0..damage.len() {
-                    let hits = damage[pixel_ind];
-                    self.static_obstacles[pixel_ind] =
-                        self.static_obstacles[pixel_ind].saturating_sub(hits);
-
-                    if hits > 0 {
-                        let color = egui::Color32::from_rgb(255, hits.clamp(0, 255) as u8, 0);
-                        color_image.pixels[pixel_ind] = color;
-                    }
                 }
 
                 let color = egui::Color32::from_rgb(225, ind as u8 * 10, 255);
@@ -213,6 +200,57 @@ impl Game {
                 }
             });
 
+        // faster than retain() since we don't care about preserving shell order
+        // self.shells.iter_mut().rev().enumerate().for_each(|(shell_index, shell)| {
+        for shell_index in (0..self.shells.len()).rev() {
+            let shell = &mut self.shells[shell_index];
+            // need to scale the speed to account for dx or dy being normalized
+            let num = (shell.speed / shell.angle.scale).floor() as usize;
+            // TODO(lucasw) move the fractional part at the end as well
+            for i in 0..num {
+                let fr = i as f32 / shell.speed;
+                let color = egui::Color32::from_rgb((fr * 255.0) as u8, (fr * 255.0) as u8, 0);
+                shell.x += shell.angle.dx;
+                shell.y += shell.angle.dy;
+                if let Some(pixel_ind) = position_to_ind(shell.x, shell.y, width, height) {
+                    color_image.pixels[pixel_ind] = color;
+                    // see if the shell has hit an obstacle
+                    if self.static_obstacles[pixel_ind] > 0 {
+                        // cause damage to the obstacle and surrounding grid cells
+                        // via the damage map
+                        // TODO(lucasw) sprite blitting
+                        for (iy, row) in Shell::DAMAGE_PATTERN.iter().enumerate() {
+                            let oy = iy as f32 - 2.0;
+                            for (ix, shell_pattern_value) in row.iter().enumerate() {
+                                let ox = ix as f32 - 2.0;
+                                if let Some(damage_ind) =
+                                    position_to_ind(shell.x + ox, shell.y + oy, width, height)
+                                {
+                                    damage[damage_ind] += shell_pattern_value;
+                                }
+                            }
+                        }
+                        self.shells.swap_remove(shell_index);
+                        break;
+                    }
+                } else {
+                    // remove since the shell went off map
+                    self.shells.swap_remove(shell_index);
+                    break;
+                }
+            }
+        }
+
+        for (pixel_ind, hits) in damage.into_iter().enumerate() {
+            self.static_obstacles[pixel_ind] =
+                self.static_obstacles[pixel_ind].saturating_sub(hits);
+
+            if hits > 0 {
+                let color = egui::Color32::from_rgb(255, hits.clamp(0, 255) as u8, 0);
+                color_image.pixels[pixel_ind] = color;
+            }
+        }
+
         self.counter += 1;
     }
 
@@ -231,8 +269,8 @@ impl Game {
             let turret = Turret {
                 x: 50.0 + i as f32 * 30.0,
                 y: height as f32 - 20.0,
-                angle: Angle::new(-std::f32::consts::FRAC_PI_2 + i as f32 * 0.01),
-                reload: 10 + (rand::random::<f32>() * 3.0) as usize,
+                angle: Angle::new(-std::f32::consts::FRAC_PI_2 + i as f32 * 0.05),
+                reload: 4 + (rand::random::<f32>() * 3.0) as usize,
                 last_shot: 0,
             };
             println!("{i} {turret:?}");
