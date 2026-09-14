@@ -133,6 +133,17 @@ impl Game {
                 color_image.pixels[ind] = color;
             });
 
+        // how much damage is being done within a grid location
+        let mut damage: Vec<u16> = vec![0; width * height];
+
+        let shell_pattern = [
+            [0, 10, 20, 10, 0],
+            [10, 50, 100, 50, 10],
+            [20, 100, 500, 100, 20],
+            [10, 50, 100, 50, 10],
+            [0, 10, 20, 10, 0],
+        ];
+
         self.turrets0
             .iter_mut()
             .enumerate()
@@ -149,7 +160,20 @@ impl Game {
                         if let Some(pixel_ind) = position_to_ind(shell_x, shell_y, width, height) {
                             color_image.pixels[pixel_ind] = color;
                             if self.static_obstacles[pixel_ind] > 0 {
-                                self.static_obstacles[pixel_ind] = 0;
+                                for iy in 0..5 {
+                                    let oy = iy as f32 - 2.0;
+                                    for ix in 0..5 {
+                                        let ox = ix as f32 - 2.0;
+                                        if let Some(damage_ind) = position_to_ind(
+                                            shell_x + ox,
+                                            shell_y + oy,
+                                            width,
+                                            height,
+                                        ) {
+                                            damage[damage_ind] += shell_pattern[iy][ix];
+                                        }
+                                    }
+                                }
                                 break;
                             }
                         } else {
@@ -157,8 +181,19 @@ impl Game {
                         }
                     }
                     turret.angle =
-                        Angle::new(turret.angle.angle + (rand::random::<f32>() - 0.5) * 0.01);
+                        Angle::new(turret.angle.angle + (rand::random::<f32>() - 0.5) * 0.02);
                     turret.last_shot = self.counter;
+                }
+
+                for pixel_ind in 0..damage.len() {
+                    let hits = damage[pixel_ind];
+                    self.static_obstacles[pixel_ind] =
+                        self.static_obstacles[pixel_ind].saturating_sub(hits);
+
+                    if hits > 0 {
+                        let color = egui::Color32::from_rgb(255, hits.clamp(0, 255) as u8, 0);
+                        color_image.pixels[pixel_ind] = color;
+                    }
                 }
 
                 let color = egui::Color32::from_rgb(225, ind as u8 * 10, 255);
