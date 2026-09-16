@@ -50,7 +50,7 @@ fn position_to_ind(x: f32, y: f32, width: usize, height: usize) -> Option<usize>
 #[derive(Clone, Debug)]
 struct Angle {
     /// radians
-    angle: f32,
+    // angle: f32,
     /// one of these will be +/- 1.0, together they will point
     /// in the direction of angle but define a vector with a length >= 1.0
     dx: f32,
@@ -74,7 +74,7 @@ impl Angle {
 
         Self {
             // TODO(lucasw) normalize angle to be -π to π
-            angle: angle % (2.0 * std::f32::consts::PI),
+            // angle: angle % (2.0 * std::f32::consts::PI),
             dx,
             dy,
             scale,
@@ -95,6 +95,8 @@ struct Turret {
     angle: Angle,
     reload: usize,
     last_shot: usize,
+    /// which enemy soldier to target
+    target: usize,
 }
 
 /// Turrets fire shells
@@ -176,22 +178,51 @@ impl Game {
             .iter_mut()
             .enumerate()
             .for_each(|(ind, turret)| {
-                let elapsed = self.counter - turret.last_shot;
-                if elapsed > turret.reload {
-                    // println!("[{}] {ind} shoot", self.counter);
-                    let speed = 20.0 + rand::random::<f32>() * 2.0;
-                    let offset = speed * rand::random::<f32>() * 0.4;
-                    let shell = Shell {
-                        x: turret.x + turret.angle.dx * offset,
-                        y: turret.y + turret.angle.dy * offset,
-                        angle: turret.angle.clone(),
-                        speed,
-                    };
-                    self.shells.push(shell);
-                    turret.angle =
-                        Angle::new(turret.angle.angle + (rand::random::<f32>() - 0.5) * 0.02);
-                    turret.last_shot = self.counter;
+                if !self.soldiers.is_empty() {
+                    // switch to a random target if it is closer
+                    {
+                        let target0 = turret.target % self.soldiers.len();
+                        // TODO(lucasw) fastrand another index
+                        let target1 = fastrand::usize(0..self.soldiers.len());
+                        // target the one closer to the bottom
+                        let dx0 = self.soldiers[target0].x - turret.x;
+                        let dy0 = self.soldiers[target0].y - turret.y;
+                        let dist0_sq = dx0 * dx0 + dy0 * dy0;
+                        let dx1 = self.soldiers[target1].x - turret.x;
+                        let dy1 = self.soldiers[target1].y - turret.y;
+                        let dist1_sq = dx1 * dx1 + dy1 * dy1;
+                        if dist1_sq < dist0_sq {
+                            turret.target = target1;
+                        } else {
+                            turret.target = target0;
+                        }
+                    }
+
+                    let target = &self.soldiers[turret.target];
+                    let dx = target.x - turret.x;
+                    let dy = target.y - turret.y;
+                    // TODO(lucasw) rotate slowly instead of instantaneous
+                    turret.angle = Angle::new(dy.atan2(dx) + (rand::random::<f32>() - 0.5) * 0.005);
+
+                    let elapsed = self.counter - turret.last_shot;
+                    if elapsed > turret.reload {
+                        // println!("[{}] {ind} shoot", self.counter);
+                        let speed = 20.0 + rand::random::<f32>() * 2.0;
+                        let offset = speed * rand::random::<f32>() * 0.4;
+                        let shell = Shell {
+                            x: turret.x + turret.angle.dx * offset,
+                            y: turret.y + turret.angle.dy * offset,
+                            angle: turret.angle.clone(),
+                            speed,
+                        };
+                        self.shells.push(shell);
+                        // turret.angle =
+                        //     Angle::new(turret.angle.angle + (rand::random::<f32>() - 0.5) * 0.02);
+                        turret.last_shot = self.counter;
+                    }
                 }
+                // TODO(lucasw) else the turrets won, maybe reset or write a message,
+                // or spawn more enemies
 
                 let color = egui::Color32::from_rgb(225, ind as u8 * 10, 255);
                 for oy in [-1.0, 0.0, 1.0] {
@@ -284,43 +315,40 @@ impl Game {
 
         // move the (surviving) soldiers if the path is clear
         // TODO(lucasw) the lowest indexed ones get the initiative
-        self.soldiers
-            .iter_mut()
-            .enumerate()
-            .for_each(|(ind, soldier)| {
-                let x0 = soldier.x;
-                let y0 = soldier.y;
-                if let Some(pixel_ind0) = position_to_ind(x0, y0, width, height) {
-                    let x_left = x0 - 1.0;
-                    let x_right = x0 + 1.0;
-                    let y_down = y0 + 1.0;
-                    // TODO(lucasw) semi randomize choosing left or right
-                    // don't do anything if can't move left or right or down for now
-                    let positions = {
-                        let mut positions = vec![
-                            (x0, y_down),
-                            (x_left, y_down),
-                            (x_right, y_down),
-                            (x_left, y0),
-                            (x_right, y0),
-                        ];
-                        fastrand::shuffle(&mut positions);
-                        positions
-                    };
-                    for (x, y) in positions.into_iter() {
-                        if let Some(pixel_ind1) = position_to_ind(x, y, width, height)
-                            && obstacles[pixel_ind1] == 0
-                        {
-                            soldier.x = x;
-                            soldier.y = y;
-                            // another solider can move into the empty space this one leaves
-                            // in this same update loop
-                            obstacles[pixel_ind0] = 0;
-                            break;
-                        }
+        self.soldiers.iter_mut().for_each(|soldier| {
+            let x0 = soldier.x;
+            let y0 = soldier.y;
+            if let Some(pixel_ind0) = position_to_ind(x0, y0, width, height) {
+                let x_left = x0 - 1.0;
+                let x_right = x0 + 1.0;
+                let y_down = y0 + 1.0;
+                // TODO(lucasw) semi randomize choosing left or right
+                // don't do anything if can't move left or right or down for now
+                let positions = {
+                    let mut positions = vec![
+                        (x0, y_down),
+                        (x_left, y_down),
+                        (x_right, y_down),
+                        (x_left, y0),
+                        (x_right, y0),
+                    ];
+                    fastrand::shuffle(&mut positions);
+                    positions
+                };
+                for (x, y) in positions.into_iter() {
+                    if let Some(pixel_ind1) = position_to_ind(x, y, width, height)
+                        && obstacles[pixel_ind1] == 0
+                    {
+                        soldier.x = x;
+                        soldier.y = y;
+                        // another solider can move into the empty space this one leaves
+                        // in this same update loop
+                        obstacles[pixel_ind0] = 0;
+                        break;
                     }
                 }
-            });
+            }
+        });
 
         for (pixel_ind, hits) in damage.into_iter().enumerate() {
             self.static_obstacles[pixel_ind] =
@@ -359,19 +387,23 @@ impl Game {
             }
         }
 
-        for i in 0..16 {
+        self.turrets0.clear();
+        let num = 32;
+        for i in 0..32 {
             let turret = Turret {
-                x: 100.0 + i as f32 * 30.0,
+                x: i as f32 * width as f32 / num as f32,
                 y: height as f32 - 20.0,
                 angle: Angle::new(-std::f32::consts::FRAC_PI_2 + i as f32 * 0.005),
                 reload: 4 + (rand::random::<f32>() * 3.0) as usize,
                 last_shot: 0,
+                target: i * 100,
             };
             println!("{i} {turret:?}");
             self.turrets0.push(turret);
         }
 
-        for i in 0..2000 {
+        self.soldiers.clear();
+        for i in 0..28000 {
             let soldier = Soldier {
                 x: (i % width) as f32,
                 y: (i / width) as f32,
