@@ -116,6 +116,13 @@ impl Shell {
     ];
 }
 
+/// TODO(lucasw) consider a separate array of positions and of hit points
+struct Soldier {
+    x: f32,
+    y: f32,
+    health: u16,
+}
+
 #[derive(Default)]
 struct Game {
     static_obstacles: Vec<u16>,
@@ -123,6 +130,9 @@ struct Game {
     turrets0: Vec<Turret>,
 
     shells: Vec<Shell>,
+
+    soldiers: Vec<Soldier>,
+
     /*
     particles0: Vec<Particle>,
     /// particles will move to higher scoring neighbor cells here
@@ -200,6 +210,13 @@ impl Game {
                 }
             });
 
+        let mut obstacles = self.static_obstacles.clone();
+        self.soldiers.iter().for_each(|soldier| {
+            if let Some(pixel_ind) = position_to_ind(soldier.x, soldier.y, width, height) {
+                obstacles[pixel_ind] = soldier.health;
+            }
+        });
+
         // faster than retain() since we don't care about preserving shell order
         // self.shells.iter_mut().rev().enumerate().for_each(|(shell_index, shell)| {
         for shell_index in (0..self.shells.len()).rev() {
@@ -215,7 +232,7 @@ impl Game {
                 if let Some(pixel_ind) = position_to_ind(shell.x, shell.y, width, height) {
                     color_image.pixels[pixel_ind] = color;
                     // see if the shell has hit an obstacle
-                    if self.static_obstacles[pixel_ind] > 0 {
+                    if obstacles[pixel_ind] > 0 {
                         // cause damage to the obstacle and surrounding grid cells
                         // via the damage map
                         // TODO(lucasw) sprite blitting
@@ -241,6 +258,30 @@ impl Game {
             }
         }
 
+        for soldier_index in (0..self.soldiers.len()).rev() {
+            if let Some(pixel_ind) = position_to_ind(
+                self.soldiers[soldier_index].x,
+                self.soldiers[soldier_index].y,
+                width,
+                height,
+            ) {
+                let mut health = self.soldiers[soldier_index].health;
+                health = health.saturating_sub(damage[pixel_ind]);
+                self.soldiers[soldier_index].health = health;
+
+                if health == 0 {
+                    self.soldiers.swap_remove(soldier_index);
+                }
+
+                // TODO(lucasw) should this be in a separate loop?
+                let color = egui::Color32::from_rgb(20, health.clamp(0, 255) as u8, 100);
+                color_image.pixels[pixel_ind] = color;
+            } else {
+                // off map soldiers are removed
+                self.soldiers.swap_remove(soldier_index);
+            }
+        }
+
         for (pixel_ind, hits) in damage.into_iter().enumerate() {
             self.static_obstacles[pixel_ind] =
                 self.static_obstacles[pixel_ind].saturating_sub(hits);
@@ -257,11 +298,24 @@ impl Game {
     fn reset(&mut self, width: usize, height: usize) {
         self.static_obstacles = vec![0; width * height];
 
-        // make a barrier in the static obstacles
-        for yi in 50..100 {
-            for xi in 0..width {
-                let ind = yi * width + xi;
-                self.static_obstacles[ind] = 2000;
+        // make barriers in the static obstacles
+        for (x0, y0) in [
+            (0, 50),
+            (50, 140),
+            (100, 80),
+            (120, 140),
+            (140, 50),
+            (200, 75),
+            (250, 200),
+            (400, 90),
+            (500, 80),
+            (300, 130),
+        ] {
+            for yi in y0..(y0 + 24) {
+                for xi in x0..(x0 + 60) {
+                    let ind = yi * width + xi;
+                    self.static_obstacles[ind] = 2000;
+                }
             }
         }
 
@@ -275,6 +329,15 @@ impl Game {
             };
             println!("{i} {turret:?}");
             self.turrets0.push(turret);
+        }
+
+        for i in 0..1000 {
+            let soldier = Soldier {
+                x: (i % width) as f32,
+                y: (i / width) as f32,
+                health: 200,
+            };
+            self.soldiers.push(soldier);
         }
     }
 
@@ -551,8 +614,8 @@ impl eframe::App for App {
                 self.update_elapsed = self.instant.unwrap().elapsed();
             }
             ui.label(format!(
-                "update elapsed {:.3}ms",
-                self.update_elapsed.as_millis()
+                "update elapsed {:.2}ms",
+                self.update_elapsed.as_micros() as f32 / 1000.0,
             ));
 
             let size = self.color_image.size;
@@ -562,6 +625,8 @@ impl eframe::App for App {
                 self.color_image.pixels.len()
             ));
             // ui.label(format!("max0 {:.3}, max1 {:.3}", self.max0, self.max1));
+            //
+            ui.label(format!("{} soldiers left", self.game.soldiers.len()));
         });
 
         let mut reset_plot = false;
