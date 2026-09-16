@@ -1,5 +1,6 @@
 use eframe::egui;
 use egui_plot::{Plot, PlotImage, PlotPoint};
+// use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /*
@@ -97,6 +98,7 @@ struct Turret {
     last_shot: usize,
     /// which enemy soldier to target
     target: usize,
+    health: u16,
 }
 
 /// Turrets fire shells
@@ -128,6 +130,9 @@ struct Soldier {
 #[derive(Default)]
 struct Game {
     static_obstacles: Vec<u16>,
+
+    // damage that persisted from the last update
+    damage: Vec<u16>,
 
     turrets0: Vec<Turret>,
 
@@ -172,12 +177,19 @@ impl Game {
             });
 
         // how much damage is being done within a grid location
-        let mut damage: Vec<u16> = vec![0; width * height];
+        let damage = &mut self.damage; // .clone();
+
+        // could make this once since the turrets don't move
+        // let pixel_ind_to_turret_ind = HashMap::new();
 
         self.turrets0
             .iter_mut()
             .enumerate()
             .for_each(|(ind, turret)| {
+                // if let Some(pixel_index) = position_to_ind(turret.x, turret.y, width, height) {
+                //     pixel_to_turrent_ind.insert(pixel_index, ind);
+                // }
+
                 if !self.soldiers.is_empty() {
                     // switch to a random target if it is closer
                     {
@@ -350,13 +362,40 @@ impl Game {
             }
         });
 
-        for (pixel_ind, hits) in damage.into_iter().enumerate() {
+        // see if any turrets got destroyed
+        for turret_index in (0..self.turrets0.len()).rev() {
+            if let Some(pixel_ind) = position_to_ind(
+                self.turrets0[turret_index].x,
+                self.turrets0[turret_index].y,
+                width,
+                height,
+            ) {
+                let mut health = self.turrets0[turret_index].health;
+                health = health.saturating_sub(damage[pixel_ind]);
+                self.turrets0[turret_index].health = health;
+                if health == 0 {
+                    self.turrets0.swap_remove(turret_index);
+                    println!(
+                        "turret {turret_index} lost, {} remain!",
+                        self.turrets0.len()
+                    );
+                }
+            } else {
+                self.turrets0.swap_remove(turret_index);
+            }
+        }
+
+        for (pixel_ind, damage_at_ind) in damage.iter_mut().enumerate() {
+            let hits = *damage_at_ind;
             self.static_obstacles[pixel_ind] =
                 self.static_obstacles[pixel_ind].saturating_sub(hits);
 
             if hits > 0 {
                 let color = egui::Color32::from_rgb(255, hits.clamp(0, 255) as u8, 0);
                 color_image.pixels[pixel_ind] = color;
+
+                // persist some of the damage to the next update
+                *damage_at_ind = damage_at_ind.saturating_sub(hits / 2 + 1);
             }
         }
 
@@ -365,6 +404,7 @@ impl Game {
 
     fn reset(&mut self, width: usize, height: usize) {
         self.static_obstacles = vec![0; width * height];
+        self.damage = vec![0; width * height];
 
         // make barriers in the static obstacles
         for (x0, y0) in [
@@ -397,6 +437,7 @@ impl Game {
                 reload: 4 + (rand::random::<f32>() * 3.0) as usize,
                 last_shot: 0,
                 target: i * 100,
+                health: 1000,
             };
             println!("{i} {turret:?}");
             self.turrets0.push(turret);
