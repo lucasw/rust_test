@@ -274,13 +274,53 @@ impl Game {
                 }
 
                 // TODO(lucasw) should this be in a separate loop?
-                let color = egui::Color32::from_rgb(20, health.clamp(0, 255) as u8, 100);
+                let color = egui::Color32::from_rgb(20, 210, health.clamp(0, 255) as u8);
                 color_image.pixels[pixel_ind] = color;
             } else {
                 // off map soldiers are removed
                 self.soldiers.swap_remove(soldier_index);
             }
         }
+
+        // move the (surviving) soldiers if the path is clear
+        // TODO(lucasw) the lowest indexed ones get the initiative
+        self.soldiers
+            .iter_mut()
+            .enumerate()
+            .for_each(|(ind, soldier)| {
+                let x0 = soldier.x;
+                let y0 = soldier.y;
+                if let Some(pixel_ind0) = position_to_ind(x0, y0, width, height) {
+                    let x_left = x0 - 1.0;
+                    let x_right = x0 + 1.0;
+                    let y_down = y0 + 1.0;
+                    // TODO(lucasw) semi randomize choosing left or right
+                    // don't do anything if can't move left or right or down for now
+                    let positions = {
+                        let mut positions = vec![
+                            (x0, y_down),
+                            (x_left, y_down),
+                            (x_right, y_down),
+                            (x_left, y0),
+                            (x_right, y0),
+                        ];
+                        fastrand::shuffle(&mut positions);
+                        positions
+                    };
+                    for (x, y) in positions.into_iter() {
+                        if let Some(pixel_ind1) = position_to_ind(x, y, width, height)
+                            && obstacles[pixel_ind1] == 0
+                        {
+                            soldier.x = x;
+                            soldier.y = y;
+                            // another solider can move into the empty space this one leaves
+                            // in this same update loop
+                            obstacles[pixel_ind0] = 0;
+                            break;
+                        }
+                    }
+                }
+            });
 
         for (pixel_ind, hits) in damage.into_iter().enumerate() {
             self.static_obstacles[pixel_ind] =
@@ -319,11 +359,11 @@ impl Game {
             }
         }
 
-        for i in 0..10 {
+        for i in 0..16 {
             let turret = Turret {
-                x: 50.0 + i as f32 * 30.0,
+                x: 100.0 + i as f32 * 30.0,
                 y: height as f32 - 20.0,
-                angle: Angle::new(-std::f32::consts::FRAC_PI_2 + i as f32 * 0.05),
+                angle: Angle::new(-std::f32::consts::FRAC_PI_2 + i as f32 * 0.005),
                 reload: 4 + (rand::random::<f32>() * 3.0) as usize,
                 last_shot: 0,
             };
@@ -331,11 +371,11 @@ impl Game {
             self.turrets0.push(turret);
         }
 
-        for i in 0..1000 {
+        for i in 0..2000 {
             let soldier = Soldier {
                 x: (i % width) as f32,
                 y: (i / width) as f32,
-                health: 200,
+                health: 20,
             };
             self.soldiers.push(soldier);
         }
