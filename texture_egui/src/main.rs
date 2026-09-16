@@ -59,19 +59,29 @@ struct Angle {
     scale: f32,
 }
 
+// scale the larger (in magnitude) of x or y to be 1.0 and scale the other the same
+// if they are both zero return them unmodified
+fn normalize_either_axis(x: f32, y: f32) -> (f32, f32, f32) {
+    let xa = x.abs();
+    let ya = y.abs();
+    let scale = {
+        if xa > ya {
+            1.0 / xa
+        } else if ya > xa {
+            1.0 / ya
+        } else {
+            // this avoids a divide by zero
+            1.0
+        }
+    };
+    (x * scale, y * scale, scale)
+}
+
 impl Angle {
     fn new(angle: f32) -> Self {
-        let mut dx = angle.cos();
-        let mut dy = angle.sin();
-        let scale = {
-            if dx.abs() > dy.abs() {
-                1.0 / dx.abs()
-            } else {
-                1.0 / dy.abs()
-            }
-        };
-        dx *= scale;
-        dy *= scale;
+        let dx = angle.cos();
+        let dy = angle.sin();
+        let (dx, dy, scale) = normalize_either_axis(dx, dy);
 
         Self {
             // TODO(lucasw) normalize angle to be -π to π
@@ -139,6 +149,8 @@ struct Game {
     shells: Vec<Shell>,
 
     soldiers: Vec<Soldier>,
+    target_x: f32,
+    target_y: f32,
 
     /*
     particles0: Vec<Particle>,
@@ -192,8 +204,8 @@ impl Game {
                     // pixel_to_turrent_ind.insert(pixel_index, ind);
 
                     if !self.soldiers.is_empty() {
-                        // switch to a random target if it is closer
                         {
+                            // switch to a random target if it is closer
                             let target0 = turret.target % self.soldiers.len();
                             // TODO(lucasw) fastrand another index
                             let target1 = fastrand::usize(0..self.soldiers.len());
@@ -212,7 +224,7 @@ impl Game {
                                 dist_sq = dist0_sq;
                                 turret.target = target0;
                             }
-                            if dist_sq < 20.0 {
+                            if dist_sq < 30.0 {
                                 turret.health = turret.health.saturating_sub(100);
                                 println!("turret {ind} damaged by enemy {}", turret.health);
                             }
@@ -337,44 +349,76 @@ impl Game {
             }
         }
 
-        // move the (surviving) soldiers if the path is clear
-        // TODO(lucasw) the lowest indexed ones get the initiative
-        self.soldiers.iter_mut().for_each(|soldier| {
-            let x0 = soldier.x;
-            let y0 = soldier.y;
-            if let Some(pixel_ind0) = position_to_ind(x0, y0, width, height) {
-                let x_left = x0 - 1.0;
-                let x_right = x0 + 1.0;
-                let y_up = y0 - 1.0;
-                let y_down = y0 + 1.0;
-                // TODO(lucasw) semi randomize choosing left or right
-                // don't do anything if can't move left or right or down for now
-                let positions = {
-                    let mut positions = vec![
-                        (x0, y_down),
-                        (x_left, y_down),
-                        (x_right, y_down),
-                        (x_left, y0),
-                        (x_right, y0),
-                    ];
-                    fastrand::shuffle(&mut positions);
-                    positions.push((x0, y_up));
-                    positions
-                };
-                for (x, y) in positions.into_iter() {
-                    if let Some(pixel_ind1) = position_to_ind(x, y, width, height)
-                        && obstacles[pixel_ind1] == 0
-                    {
-                        soldier.x = x;
-                        soldier.y = y;
-                        // another solider can move into the empty space this one leaves
-                        // in this same update loop
-                        obstacles[pixel_ind0] = 0;
-                        break;
+        {
+            // TODO(lucasw) keep track of the position of the last turret target
+            // and if it was destroyed see if a random other one is close to it
+            // so the soldiers don't switch to a far away one
+            // fastrand::usize(0..self.turrets0.len());
+            if !self.turrets0.is_empty() {
+                let turret_target_ind = 0;
+                let turret = &self.turrets0[turret_target_ind];
+                let turret_x = turret.x;
+                let turret_y = turret.y;
+
+                let (dx, dy, _scale) =
+                    normalize_either_axis(turret_x - self.target_x, turret_y - self.target_y);
+                self.target_x += dx * 4.0;
+                self.target_y += dy * 4.0;
+            }
+
+            // move the (surviving) soldiers if the path is clear
+            // TODO(lucasw) the lowest indexed ones get the initiative
+            self.soldiers.iter_mut().for_each(|soldier| {
+                let x0 = soldier.x;
+                let y0 = soldier.y;
+                if let Some(pixel_ind0) = position_to_ind(x0, y0, width, height) {
+                    let speed = 1.5;
+                    let x_left = x0 - speed;
+                    let x_right = x0 + speed;
+                    let y_up = y0 - speed;
+                    let y_down = y0 + speed;
+                    // TODO(lucasw) randomize choosing what direction to go but bias
+                    // in direction of target turret
+                    let positions = {
+                        let dx = self.target_x - x0;
+                        let dy = self.target_y - y0;
+                        let (dx, dy, _scale) = normalize_either_axis(dx, dy);
+                        let x_to_turret = x0 + dx * speed;
+                        let y_to_turret = y0 + dy * speed;
+                        // let mut positions = vec![(x_to_turret, y_to_turret)];
+                        let mut positions = vec![
+                            (x_to_turret, y_to_turret),
+                            (x_to_turret, y_to_turret),
+                            (x_to_turret, y_to_turret),
+                            (x_to_turret, y_to_turret),
+                            (x0, y_down),
+                            // (x_left, y_down),
+                            // (x_right, y_down),
+                            (x_left, y0),
+                            (x_right, y0),
+                            (x0, y_up),
+                        ];
+                        fastrand::shuffle(&mut positions);
+                        // positions.extend(positions_to_shuffle);
+                        // only consider going backwards last
+                        // positions.push((x0, y_up));
+                        positions
+                    };
+                    for (x, y) in positions.into_iter() {
+                        if let Some(pixel_ind1) = position_to_ind(x, y, width, height)
+                            && obstacles[pixel_ind1] == 0
+                        {
+                            soldier.x = x;
+                            soldier.y = y;
+                            // another solider can move into the empty space this one leaves
+                            // in this same update loop
+                            obstacles[pixel_ind0] = 0;
+                            break;
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
 
         // see if any turrets got destroyed
         for turret_index in (0..self.turrets0.len()).rev() {
@@ -442,18 +486,30 @@ impl Game {
         }
 
         self.turrets0.clear();
-        let num = 32;
-        for i in 0..32 {
+        let turret_xs = {
+            let num = 29;
+            // TODO(lucasw) width / div has to be > num
+            let div = 3.0;
+            let num_possible = width as f32 / div;
+            let mut possible_x: Vec<f32> =
+                (0..num_possible as usize).map(|x| x as f32 * div).collect();
+            fastrand::shuffle(&mut possible_x);
+            let turret_xs: Vec<f32> = possible_x.into_iter().take(num).collect();
+            println!("{turret_xs:?}");
+            turret_xs
+        };
+
+        for x in turret_xs {
             let turret = Turret {
-                x: i as f32 * width as f32 / num as f32,
+                x, // TODO(lucasw) maybe add some random jitter
                 y: height as f32 - 20.0 + rand::random::<f32>() * 10.0,
-                angle: Angle::new(-std::f32::consts::FRAC_PI_2 + i as f32 * 0.005),
+                angle: Angle::new(-std::f32::consts::FRAC_PI_2),
                 reload: 4 + (rand::random::<f32>() * 3.0) as usize,
                 last_shot: 0,
-                target: i * 100,
+                target: 0,
                 health: 1000,
             };
-            println!("{i} {turret:?}");
+            // println!("{i} {turret:?}");
             self.turrets0.push(turret);
         }
 
